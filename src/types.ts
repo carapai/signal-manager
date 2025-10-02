@@ -89,30 +89,41 @@ export const SMSSearchParams = z.object({
     dates: z.string().optional(),
 });
 
-export const ProgramSectionSchema = z.object({
-    name: z.string(),
-    description: z.string(),
-    dataElements: z.array(
-        z.union([
-            z.object({
-                formName: z.string(),
-                displayName: z.string(),
-                id: z.string(),
-            }),
-            z.object({
+export const ProgramStageSchema = z.object({
+    programStageDataElements: z.array(
+        z.object({
+            dataElement: z.object({
                 code: z.string(),
+                name: z.string(),
                 formName: z.string(),
-                displayName: z.string(),
+                valueType: z.string(),
+                optionSet: z.object({
+                    options: z.array(
+                        z.object({
+                            code: z.string(),
+                            name: z.string(),
+                            id: z.string(),
+                        }),
+                    ),
+                }),
+                optionSetValue: z.boolean(),
                 id: z.string(),
             }),
-            z.object({ displayName: z.string(), id: z.string() }),
-        ]),
+            compulsory: z.boolean(),
+        }),
     ),
-    sortOrder: z.number(),
-    displayName: z.string(),
+    programStageSections: z.array(
+        z.object({
+            name: z.string(),
+            description: z.string(),
+            dataElements: z.array(z.object({ id: z.string() })),
+            sortOrder: z.number(),
+            displayName: z.string(),
+        }),
+    ),
 });
 
 export type SMS = z.infer<typeof SMSSchema>;
 export type Event = z.infer<typeof EventSchema>;
 export type SMSSearchParams = z.infer<typeof SMSSearchParams>;
-export type ProgramSection = z.infer<typeof ProgramSectionSchema>;
+export type ProgramStage = z.infer<typeof ProgramStageSchema>;

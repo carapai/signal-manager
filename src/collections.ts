@@ -1,8 +1,10 @@
 import { useDataEngine } from "@dhis2/app-runtime";
-import { ProgramSection, SMS, SMSSchema, SMSSearchParams } from "./types";
 import { queryCollectionOptions } from "@tanstack/query-db-collection";
 import { createCollection } from "@tanstack/react-db";
 import { QueryClient, queryOptions } from "@tanstack/react-query";
+import { ProgramStage, SMS, SMSSchema, SMSSearchParams } from "./types";
+import { record } from "zod";
+import { orderBy } from "lodash";
 
 const queryClient = new QueryClient();
 
@@ -78,18 +80,98 @@ export const initialQueryOptions = (engine: ReturnType<typeof useDataEngine>) =>
     queryOptions({
         queryKey: ["initial-data"],
         queryFn: async () => {
-            const { programStageSections } = (await engine.query({
-                programStageSections: {
-                    resource: `programStages/Nnnqw1XKpZL/programStageSections.json`,
+            const { programStage, me } = (await engine.query({
+                programStage: {
+                    resource: `programStages/Nnnqw1XKpZL.json`,
                     params: {
-                        fields: "name,sortOrder,description,displayName,dataElements[id,code,displayName,formName]",
+                        fields: "programStageDataElements[compulsory,dataElement[id,name,formName,code,valueType,optionSetValue,optionSet[options[id,name,code]]]],programStageSections[name,sortOrder,description,displayName,dataElements[id]]",
                     },
                 },
+                me: {
+                    resource: "me",
+                    params: { fields: "organisationUnits[id,name,level]" },
+                },
             })) as {
-                programStageSections: {
-                    programStageSections: ProgramSection[];
+                programStage: ProgramStage;
+                me: {
+                    organisationUnits: {
+                        id: string;
+                        name: string;
+                        level: number;
+                    }[];
                 };
             };
-            return programStageSections.programStageSections;
+            let assignedDistricts = me.organisationUnits.filter(
+                (ou) => ou.level === 3,
+            );
+
+            const belowDistricts = me.organisationUnits.flatMap((ou) => {
+                if (ou.level === 1) {
+                    return {
+                        resource: `organisationUnits/${ou.id}`,
+                        params: { fields: "id,name", level: 2, paging: false },
+                    };
+                }
+                if (ou.level === 2) {
+                    return {
+                        resource: `organisationUnits/${ou.id}`,
+                        params: { fields: "id,name", level: 1, paging: false },
+                    };
+                }
+                return [];
+            });
+
+            if (belowDistricts.length > 0) {
+                const districtQuery = belowDistricts.reduce<any>(
+                    (acc, curr, index) => {
+                        if (curr) {
+                            acc[`belowDistricts${index}`] = curr;
+                        }
+                        return acc;
+                    },
+                    {},
+                );
+
+                const data = (await engine.query(districtQuery)) as Record<
+                    string,
+                    {
+                        organisationUnits: {
+                            id: string;
+                            name: string;
+                            level: number;
+                        }[];
+                    }
+                >;
+
+                Object.values(data).forEach((d) => {
+                    assignedDistricts = assignedDistricts.concat(
+                        d.organisationUnits,
+                    );
+                });
+            }
+            return {
+                ...programStage,
+                programStageSections: programStage.programStageSections.map(
+                    (section) => ({
+                        ...section,
+                        dataElements: section.dataElements.map(
+                            (element) => element.id,
+                        ),
+                    }),
+                ),
+                programStageDataElements: new Map(
+                    programStage.programStageDataElements.map(
+                        ({ compulsory, dataElement }) => [
+                            dataElement.id,
+                            { ...dataElement, compulsory },
+                        ],
+                    ),
+                ),
+                assignedDistricts: orderBy(
+                    assignedDistricts,
+                    ["name"],
+                    ["asc"],
+                ).map((ou) => ({ label: ou.name, value: ou.id })),
+            };
         },
     });
