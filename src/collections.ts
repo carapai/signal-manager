@@ -51,11 +51,26 @@ export const smsQueryOptions = (
                 query.append("filter", `originator:like:${q}`);
                 query.append("rootJunction", "OR");
             }
+            // if (page === 1) {
+            //     query.append("totalPages", "true");
+            // }
             const { sms } = (await engine.query({
                 sms: {
                     resource: `sms/inbound?${query.toString()}`,
                 },
-            })) as { sms: { inboundsmss: SMS[] } };
+            })) as {
+                sms: {
+                    inboundsmss: SMS[];
+                    pager: {
+                        page: number;
+                        total: number;
+                        pageSize: number;
+                        pageCount: number;
+                    };
+                };
+            };
+
+            console.log("Fetched SMS data:", sms);
             const ids = sms.inboundsmss.map((s) => s.id);
             let events: { events: { events: Event[] } } = {
                 events: { events: [] },
@@ -72,12 +87,15 @@ export const smsQueryOptions = (
                     },
                 })) as { events: { events: Event[] } };
             }
-            return sms.inboundsmss.map((sms) => ({
+            return {
                 ...sms,
-                forwarded:
-                    events.events.events.find((e) => e.event === sms.id) !==
-                    undefined,
-            }));
+                inboundsmss: sms.inboundsmss.map((sms) => ({
+                    ...sms,
+                    forwarded:
+                        events.events.events.find((e) => e.event === sms.id) !==
+                        undefined,
+                })),
+            };
         },
     });
 };

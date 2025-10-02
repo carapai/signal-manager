@@ -62,6 +62,7 @@ function SMSRouteComponent() {
     const { engine, queryClient } = SMSRoute.useRouteContext();
     const [open, setOpen] = useState(false);
     const [form] = Form.useForm();
+    const navigate = SMSIndexRoute.useNavigate();
     const programStage = useLoaderData({ from: "__root__" });
     const search = SMSRoute.useSearch();
     const { data } = useSuspenseQuery(smsQueryOptions(engine, search));
@@ -173,7 +174,7 @@ function SMSRouteComponent() {
         <Flex vertical gap={10} style={{ width: "100%" }}>
             <Table
                 columns={columns}
-                dataSource={data}
+                dataSource={data.inboundsmss}
                 rowKey="id"
                 // bordered
                 onRow={(record) => ({
@@ -182,6 +183,30 @@ function SMSRouteComponent() {
                             record.forwarded === true ? "#eff7f0ff" : "none",
                     },
                 })}
+                pagination={{
+                    total: data.pager.total,
+                    current: data.pager.page,
+                    pageSize: data.pager.pageSize,
+                    onChange: (page, pageSize) => {
+                        if (pageSize !== search.pageSize) {
+                            navigate({
+                                search: (prev) => ({
+                                    ...prev,
+                                    page: 1,
+                                    pageSize,
+                                }),
+                            });
+                            return;
+                        } else {
+                            navigate({
+                                search: (prev) => ({
+                                    ...prev,
+                                    page,
+                                }),
+                            });
+                        }
+                    },
+                }}
             />
             <Modal
                 open={open}
