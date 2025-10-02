@@ -45,7 +45,14 @@ function RootComponent() {
             <Flex>
                 <Menu style={{ width: 256 }} mode="inline" items={items} />
             </Flex>
-            <Flex style={{ flex: 1, height: "calc(100vh - 48px)", overflow: "auto" }}>
+            <Flex
+                style={{
+                    flex: 1,
+                    height: "calc(100vh - 48px)",
+                    overflow: "auto",
+                    padding: 10,
+                }}
+            >
                 <Outlet />
             </Flex>
         </Flex>

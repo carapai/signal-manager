@@ -1,5 +1,5 @@
 import { useDataEngine } from "@dhis2/app-runtime";
-import { SMS, SMSSchema } from "./types";
+import { SMS, SMSSchema, SMSSearchParams } from "./types";
 import { queryCollectionOptions } from "@tanstack/query-db-collection";
 import { createCollection } from "@tanstack/react-db";
 import { QueryClient, queryOptions } from "@tanstack/react-query";
@@ -32,22 +32,32 @@ export const smsCollection = (engine: ReturnType<typeof useDataEngine>) => {
     );
 };
 
-export const smsQueryOptions = (engine: ReturnType<typeof useDataEngine>) =>
-    queryOptions({
-        queryKey: ["sms-data"],
+export const smsQueryOptions = (
+    engine: ReturnType<typeof useDataEngine>,
+    searchParams: SMSSearchParams = { page: 1, pageSize: 10, q: "" },
+) => {
+    const { page, pageSize, q } = searchParams;
+    return queryOptions({
+        queryKey: ["sms-data", page, pageSize, q],
         queryFn: async () => {
+            const query = new URLSearchParams();
+            query.append("pageSize", pageSize.toString());
+            query.append("page", page.toString());
+            query.append("fields", "*");
+            if (q) {
+                query.append("filter", `text:like:${q}`);
+                query.append("filter", `originator:like:${q}`);
+                query.append("rootJunction", "OR");
+            }
             const { sms } = (await engine.query({
                 sms: {
-                    resource: "sms/inbound",
-                    params: {
-                        pageSize: 10,
-                        fields: "*",
-                    },
+                    resource: `sms/inbound?${query.toString()}`,
                 },
             })) as { sms: { inboundsmss: SMS[] } };
             return sms.inboundsmss;
         },
     });
+};
 export const signalsQueryOptions = (engine: ReturnType<typeof useDataEngine>) =>
     queryOptions({
         queryKey: ["signals-data"],

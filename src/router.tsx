@@ -9,9 +9,13 @@ import React from "react";
 import { RootRoute } from "./routes/__root";
 import { IndexRoute } from "./routes/index";
 import { SignalsRoute } from "./routes/signals";
-import { SMSRoute } from "./routes/sms";
+import { SMSIndexRoute, SMSRoute } from "./routes/sms";
 
-const routeTree = RootRoute.addChildren([IndexRoute, SignalsRoute, SMSRoute]);
+const routeTree = RootRoute.addChildren([
+    IndexRoute,
+    SignalsRoute,
+    SMSRoute.addChildren([SMSIndexRoute]),
+]);
 export const router = createRouter({
     routeTree,
     defaultPendingComponent: () => (

@@ -15,7 +15,13 @@ declare module "@tanstack/react-router" {
 const MyApp: FC = () => {
     const engine = useDataEngine();
     return (
-        <ConfigProvider theme={{}}>
+        <ConfigProvider
+            theme={{
+                token: {
+                    borderRadius: 5,
+                },
+            }}
+        >
             <QueryClientProvider client={queryClient}>
                 <RouterProvider router={router} context={{ engine }} />
             </QueryClientProvider>

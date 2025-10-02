@@ -82,5 +82,13 @@ export const EventSchema = z.object({
     notes: z.array(z.unknown()),
 });
 
+export const SMSSearchParams = z.object({
+    page: z.number().min(1).optional().default(1),
+    pageSize: z.number().min(1).max(100).optional().default(10),
+    q: z.string().optional().default(""),
+    dates: z.string().optional(),
+});
+
 export type SMS = z.infer<typeof SMSSchema>;
 export type Event = z.infer<typeof EventSchema>;
+export type SMSSearchParams = z.infer<typeof SMSSearchParams>;
