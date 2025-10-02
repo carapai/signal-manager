@@ -59,22 +59,70 @@ export const SMSIndexRoute = createRoute({
 });
 
 function SMSRouteComponent() {
-    const { engine } = SMSRoute.useRouteContext();
+    const { engine, queryClient } = SMSRoute.useRouteContext();
     const [open, setOpen] = useState(false);
     const [form] = Form.useForm();
-    const [formValues, setFormValues] = useState<any>();
     const programStage = useLoaderData({ from: "__root__" });
     const search = SMSRoute.useSearch();
     const { data } = useSuspenseQuery(smsQueryOptions(engine, search));
+    const [selectedSMS, setSelectedSMS] = useState<SMS | null>(null);
 
     const handleForward = (sms: SMS) => {
+        setSelectedSMS(sms);
         setOpen(true);
+        form.setFieldsValue({
+            SXmppM2WKNo: "TTTTTTT",
+        });
     };
 
-    const onCreate = (values: any) => {
-        console.log("Received values of form: ", values);
-        setFormValues(values);
+    const onCreate = async (values: any) => {
+        const { district, ...dataValues } = values;
+        console.log("Forwarding SMS: ", selectedSMS, " with values: ", values);
+        if (!selectedSMS) return;
+        const response = await engine.mutate({
+            resource: "events",
+            type: "create",
+            data: {
+                events: [
+                    {
+                        event: selectedSMS.id,
+                        programStage: "Nnnqw1XKpZL",
+                        orgUnit: district,
+                        program: "iaN1DovM5em",
+                        eventDate: new Date().toISOString(),
+                        status: "ACTIVE",
+                        dataValues: Object.entries(dataValues).flatMap(
+                            ([dataElement, value]) => {
+                                if (value === undefined) return [];
+                                if (value === null) return [];
+                                if (value === false) return [];
+                                return { dataElement, value };
+                            },
+                        ),
+                    },
+                ],
+            },
+            params: {
+                async: false,
+            },
+        });
+        queryClient.setQueryData(
+            smsQueryOptions(engine, search).queryKey,
+            (old: any) => {
+                if (!old) return old;
+                return (old as SMS[]).map((sms) => {
+                    if (sms.id === selectedSMS.id) {
+                        return {
+                            ...sms,
+                            forwarded: true,
+                        };
+                    }
+                    return sms;
+                });
+            },
+        );
         setOpen(false);
+        form.resetFields();
     };
 
     const columns: TableProps<SMS>["columns"] = [
@@ -102,20 +150,39 @@ function SMSRouteComponent() {
             title: "Actions",
             dataIndex: "actions",
             key: "actions",
-            render: (_, record) => (
-                <Space size="middle">
+
+            render: (_, record) => {
+                if (record.forwarded)
+                    return (
+                        <Button onClick={() => handleForward(record)}>
+                            Update
+                        </Button>
+                    );
+
+                return (
                     <Button onClick={() => handleForward(record)}>
                         Forward
                     </Button>
-                </Space>
-            ),
+                );
+            },
             width: 50,
             align: "center",
         },
     ];
     return (
         <Flex vertical gap={10} style={{ width: "100%" }}>
-            <Table columns={columns} dataSource={data} rowKey="id" bordered />
+            <Table
+                columns={columns}
+                dataSource={data}
+                rowKey="id"
+                // bordered
+                onRow={(record) => ({
+                    style: {
+                        backgroundColor:
+                            record.forwarded === true ? "#eff7f0ff" : "none",
+                    },
+                })}
+            />
             <Modal
                 open={open}
                 title="Create a new signal"
@@ -129,7 +196,7 @@ function SMSRouteComponent() {
                         layout="vertical"
                         form={form}
                         name="form_in_modal"
-                        initialValues={{ modifier: "public" }}
+                        initialValues={{ SXmppM2WKNo: "TTTTTTT" }}
                         clearOnDestroy
                         onFinish={(values) => onCreate(values)}
                     >
@@ -174,18 +241,14 @@ function SMSRouteComponent() {
                                 dataElement?.optionSet
                             ) {
                                 element = (
-                                    <Select>
-                                        {dataElement.optionSet?.options.map(
-                                            (option) => (
-                                                <Select.Option
-                                                    key={option.id}
-                                                    value={option.id}
-                                                >
-                                                    {option.name}
-                                                </Select.Option>
-                                            ),
+                                    <Select
+                                        options={dataElement.optionSet.options.map(
+                                            (option) => ({
+                                                label: option.name,
+                                                value: option.code,
+                                            }),
                                         )}
-                                    </Select>
+                                    />
                                 );
                             }
                             if (dataElement?.valueType === "BOOLEAN") {

@@ -3,8 +3,8 @@ import { queryCollectionOptions } from "@tanstack/query-db-collection";
 import { createCollection } from "@tanstack/react-db";
 import { QueryClient, queryOptions } from "@tanstack/react-query";
 import { ProgramStage, SMS, SMSSchema, SMSSearchParams } from "./types";
-import { record } from "zod";
 import { orderBy } from "lodash";
+import { Event } from "./types";
 
 const queryClient = new QueryClient();
 
@@ -56,7 +56,28 @@ export const smsQueryOptions = (
                     resource: `sms/inbound?${query.toString()}`,
                 },
             })) as { sms: { inboundsmss: SMS[] } };
-            return sms.inboundsmss;
+            const ids = sms.inboundsmss.map((s) => s.id);
+            let events: { events: { events: Event[] } } = {
+                events: { events: [] },
+            };
+            if (ids.length > 0) {
+                events = (await engine.query({
+                    events: {
+                        resource: `tracker/events`,
+                        params: {
+                            pageSize: ids.length,
+                            events: ids.join(","),
+                            fields: "event",
+                        },
+                    },
+                })) as { events: { events: Event[] } };
+            }
+            return sms.inboundsmss.map((sms) => ({
+                ...sms,
+                forwarded:
+                    events.events.events.find((e) => e.event === sms.id) !==
+                    undefined,
+            }));
         },
     });
 };

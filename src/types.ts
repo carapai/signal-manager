@@ -47,6 +47,7 @@ export const SMSSchema = z.object({
     gatewayid: z.string(),
     text: z.string(),
     smsstatus: z.string(),
+		forwarded: z.boolean().optional(),
 });
 
 export const EventSchema = z.object({
