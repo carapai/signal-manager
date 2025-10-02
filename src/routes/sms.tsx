@@ -1,5 +1,5 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { createRoute, Outlet } from "@tanstack/react-router";
+import { createRoute, Outlet, useLoaderData } from "@tanstack/react-router";
 import React from "react";
 import { smsQueryOptions } from "../collections";
 import { RootRoute } from "./__root";
@@ -53,6 +53,7 @@ export const SMSIndexRoute = createRoute({
 
 function SMSRouteComponent() {
     const { engine } = SMSRoute.useRouteContext();
+    const programSections = useLoaderData({ from: "__root__" });
     const search = SMSRoute.useSearch();
     const { data } = useSuspenseQuery(smsQueryOptions(engine, search));
     const handleForward = (sms: SMS) => {
@@ -95,5 +96,9 @@ function SMSRouteComponent() {
             align: "center",
         },
     ];
-    return <Table columns={columns} dataSource={data} rowKey="id" bordered />;
+    return (
+        <Flex vertical gap={10} style={{ width: "100%" }}>
+            <Table columns={columns} dataSource={data} rowKey="id" bordered />
+        </Flex>
+    );
 }

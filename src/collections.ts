@@ -1,5 +1,5 @@
 import { useDataEngine } from "@dhis2/app-runtime";
-import { SMS, SMSSchema, SMSSearchParams } from "./types";
+import { ProgramSection, SMS, SMSSchema, SMSSearchParams } from "./types";
 import { queryCollectionOptions } from "@tanstack/query-db-collection";
 import { createCollection } from "@tanstack/react-db";
 import { QueryClient, queryOptions } from "@tanstack/react-query";
@@ -72,5 +72,24 @@ export const signalsQueryOptions = (engine: ReturnType<typeof useDataEngine>) =>
                 },
             })) as { events: { instances: Event[] } };
             return events.instances;
+        },
+    });
+export const initialQueryOptions = (engine: ReturnType<typeof useDataEngine>) =>
+    queryOptions({
+        queryKey: ["initial-data"],
+        queryFn: async () => {
+            const { programStageSections } = (await engine.query({
+                programStageSections: {
+                    resource: `programStages/Nnnqw1XKpZL/programStageSections.json`,
+                    params: {
+                        fields: "name,sortOrder,description,displayName,dataElements[id,code,displayName,formName]",
+                    },
+                },
+            })) as {
+                programStageSections: {
+                    programStageSections: ProgramSection[];
+                };
+            };
+            return programStageSections.programStageSections;
         },
     });

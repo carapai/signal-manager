@@ -11,6 +11,7 @@ import React from "react";
 import { AppstoreOutlined, MailOutlined } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Menu } from "antd";
+import { initialQueryOptions } from "../collections";
 
 type MenuItem = Required<MenuProps>["items"][number];
 
@@ -19,6 +20,12 @@ export const RootRoute = createRootRouteWithContext<{
     engine: ReturnType<typeof useDataEngine>;
 }>()({
     component: RootComponent,
+
+    loader: (opts) => {
+        return opts.context.queryClient.ensureQueryData(
+            initialQueryOptions(opts.context.engine),
+        );
+    },
 });
 
 const items: MenuItem[] = [

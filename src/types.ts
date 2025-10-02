@@ -89,6 +89,30 @@ export const SMSSearchParams = z.object({
     dates: z.string().optional(),
 });
 
+export const ProgramSectionSchema = z.object({
+    name: z.string(),
+    description: z.string(),
+    dataElements: z.array(
+        z.union([
+            z.object({
+                formName: z.string(),
+                displayName: z.string(),
+                id: z.string(),
+            }),
+            z.object({
+                code: z.string(),
+                formName: z.string(),
+                displayName: z.string(),
+                id: z.string(),
+            }),
+            z.object({ displayName: z.string(), id: z.string() }),
+        ]),
+    ),
+    sortOrder: z.number(),
+    displayName: z.string(),
+});
+
 export type SMS = z.infer<typeof SMSSchema>;
 export type Event = z.infer<typeof EventSchema>;
 export type SMSSearchParams = z.infer<typeof SMSSearchParams>;
+export type ProgramSection = z.infer<typeof ProgramSectionSchema>;
