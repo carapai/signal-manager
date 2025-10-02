@@ -1,0 +1,29 @@
+{
+    "name": "signal-manager",
+    "version": "1.0.0",
+    "description": "",
+    "license": "BSD-3-Clause",
+    "private": true,
+    "scripts": {
+        "build": "d2-app-scripts build",
+        "start": "d2-app-scripts start --proxy https://eidsr.health.go.ug",
+        "test": "d2-app-scripts test",
+        "deploy": "d2-app-scripts deploy"
+    },
+    "devDependencies": {
+        "@dhis2/cli-app-scripts": "^12.8.0",
+        "@types/jest": "^30.0.0",
+        "@types/react": "^19.2.0",
+        "@types/react-dom": "^19.2.0",
+        "typescript": "^5"
+    },
+    "dependencies": {
+        "@dhis2/app-runtime": "^3.14.6",
+        "@tanstack/query-db-collection": "^0.2.24",
+        "@tanstack/react-db": "^0.1.25",
+        "@tanstack/react-query": "^5.90.2",
+        "@tanstack/react-router": "^1.132.31",
+        "antd": "^5.27.4",
+        "zod": "^4.1.11"
+    }
+}
