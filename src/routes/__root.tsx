@@ -1,11 +1,11 @@
 import { useDataEngine } from "@dhis2/app-runtime";
 import { QueryClient } from "@tanstack/react-query";
 import {
-    createRootRouteWithContext,
-    Link,
-    Outlet,
+	createRootRouteWithContext,
+	Link,
+	Outlet,
 } from "@tanstack/react-router";
-import { Flex, Splitter } from "antd";
+import { Flex } from "antd";
 import React from "react";
 
 import { AppstoreOutlined, MailOutlined } from "@ant-design/icons";

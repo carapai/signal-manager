@@ -25,6 +25,7 @@
         "@tanstack/react-router": "^1.132.31",
         "@types/lodash": "^4.17.20",
         "antd": "^5.27.4",
+        "dayjs": "^1.11.18",
         "lodash": "^4.17.21",
         "zod": "^4.1.11"
     }

@@ -1,8 +1,5 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createRoute, Outlet, useLoaderData } from "@tanstack/react-router";
-import React, { useState } from "react";
-import { smsQueryOptions } from "../collections";
-import { RootRoute } from "./__root";
 import {
     Button,
     Col,
@@ -14,12 +11,14 @@ import {
     Modal,
     Row,
     Select,
-    Space,
     Table,
     Typography,
     type TableProps,
 } from "antd";
+import React, { useState } from "react";
+import { smsQueryOptions } from "../collections";
 import { SMS, SMSSearchParams } from "../types";
+import { RootRoute } from "./__root";
 
 export const SMSRoute = createRoute({
     getParentRoute: () => RootRoute,
@@ -71,9 +70,7 @@ function SMSRouteComponent() {
     const handleForward = (sms: SMS) => {
         setSelectedSMS(sms);
         setOpen(true);
-        form.setFieldsValue({
-            SXmppM2WKNo: "TTTTTTT",
-        });
+        form.setFieldsValue({});
     };
 
     const onCreate = async (values: any) => {
@@ -176,7 +173,6 @@ function SMSRouteComponent() {
                 columns={columns}
                 dataSource={data.inboundsmss}
                 rowKey="id"
-                // bordered
                 onRow={(record) => ({
                     style: {
                         backgroundColor:
@@ -185,8 +181,8 @@ function SMSRouteComponent() {
                 })}
                 pagination={{
                     total: data.pager.total,
-                    current: data.pager.page,
-                    pageSize: data.pager.pageSize,
+                    current: search.page,
+                    pageSize: search.pageSize,
                     onChange: (page, pageSize) => {
                         if (pageSize !== search.pageSize) {
                             navigate({
@@ -221,7 +217,7 @@ function SMSRouteComponent() {
                         layout="vertical"
                         form={form}
                         name="form_in_modal"
-                        initialValues={{ SXmppM2WKNo: "TTTTTTT" }}
+                        initialValues={{}}
                         clearOnDestroy
                         onFinish={(values) => onCreate(values)}
                     >

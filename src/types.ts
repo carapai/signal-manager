@@ -111,6 +111,7 @@ export const ProgramStageSchema = z.object({
                 id: z.string(),
             }),
             compulsory: z.boolean(),
+            displayInReports: z.boolean(),
         }),
     ),
     programStageSections: z.array(

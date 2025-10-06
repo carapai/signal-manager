@@ -3,7 +3,7 @@ import { queryCollectionOptions } from "@tanstack/query-db-collection";
 import { createCollection } from "@tanstack/react-db";
 import { QueryClient, queryOptions } from "@tanstack/react-query";
 import { ProgramStage, SMS, SMSSchema, SMSSearchParams } from "./types";
-import { orderBy } from "lodash";
+import { fromPairs, orderBy } from "lodash";
 import { Event } from "./types";
 
 const queryClient = new QueryClient();
@@ -36,7 +36,11 @@ export const smsCollection = (engine: ReturnType<typeof useDataEngine>) => {
 
 export const smsQueryOptions = (
     engine: ReturnType<typeof useDataEngine>,
-    searchParams: SMSSearchParams = { page: 1, pageSize: 10, q: "" },
+    searchParams: SMSSearchParams = {
+        page: 1,
+        pageSize: 10,
+        q: "",
+    },
 ) => {
     const { page, pageSize, q } = searchParams;
     return queryOptions({
@@ -46,14 +50,14 @@ export const smsQueryOptions = (
             query.append("pageSize", pageSize.toString());
             query.append("page", page.toString());
             query.append("fields", "*");
+
             if (q) {
-                query.append("filter", `text:like:${q}`);
+                query.append("filter", `text:ilike:alert ${q}`);
                 query.append("filter", `originator:like:${q}`);
                 query.append("rootJunction", "OR");
+            } else {
+                query.append("filter", `text:ilike:alert`);
             }
-            // if (page === 1) {
-            //     query.append("totalPages", "true");
-            // }
             const { sms } = (await engine.query({
                 sms: {
                     resource: `sms/inbound?${query.toString()}`,
@@ -70,7 +74,6 @@ export const smsQueryOptions = (
                 };
             };
 
-            console.log("Fetched SMS data:", sms);
             const ids = sms.inboundsmss.map((s) => s.id);
             let events: { events: { events: Event[] } } = {
                 events: { events: [] },
@@ -83,6 +86,7 @@ export const smsQueryOptions = (
                             pageSize: ids.length,
                             events: ids.join(","),
                             fields: "event",
+                            programStage: "Nnnqw1XKpZL",
                         },
                     },
                 })) as { events: { events: Event[] } };
@@ -99,22 +103,69 @@ export const smsQueryOptions = (
         },
     });
 };
-export const signalsQueryOptions = (engine: ReturnType<typeof useDataEngine>) =>
-    queryOptions({
-        queryKey: ["signals-data"],
+export const signalsQueryOptions = (
+    engine: ReturnType<typeof useDataEngine>,
+    searchParams: SMSSearchParams = {
+        page: 1,
+        pageSize: 10,
+        q: "",
+        dates: "",
+    },
+) => {
+    return queryOptions({
+        queryKey: [
+            "signals-data",
+            searchParams.page,
+            searchParams.pageSize,
+            searchParams.q,
+            searchParams.dates,
+        ],
         queryFn: async () => {
+            let params: Record<string, string | number> = {
+                pageSize: searchParams.pageSize,
+                page: searchParams.page,
+                programStage: "Nnnqw1XKpZL",
+                ouMode: "ALL",
+                totalPages: "true",
+            };
+            if (
+                searchParams.dates &&
+                searchParams.dates?.split(",").length > 1
+            ) {
+                const [occurredAfter, occurredBefore] =
+                    searchParams.dates.split(",");
+                params = { ...params, occurredAfter, occurredBefore };
+            }
             const { events } = (await engine.query({
                 events: {
                     resource: "tracker/events",
-                    params: {
-                        pageSize: 10,
-                        ouMode: "ALL",
-                    },
+                    params,
                 },
-            })) as { events: { instances: Event[] } };
-            return events.instances;
+            })) as {
+                events: {
+                    events: Event[];
+                    pager: {
+                        page: number;
+                        total: number;
+                        pageSize: number;
+                        pageCount: number;
+                    };
+                };
+            };
+            return {
+                ...events,
+                events: events.events.map(({ dataValues, ...event }) => {
+                    return {
+                        ...event,
+                        ...fromPairs(
+                            dataValues.map((dv) => [dv.dataElement, dv.value]),
+                        ),
+                    };
+                }),
+            };
         },
     });
+};
 export const initialQueryOptions = (engine: ReturnType<typeof useDataEngine>) =>
     queryOptions({
         queryKey: ["initial-data"],
@@ -123,7 +174,7 @@ export const initialQueryOptions = (engine: ReturnType<typeof useDataEngine>) =>
                 programStage: {
                     resource: `programStages/Nnnqw1XKpZL.json`,
                     params: {
-                        fields: "programStageDataElements[compulsory,dataElement[id,name,formName,code,valueType,optionSetValue,optionSet[options[id,name,code]]]],programStageSections[name,sortOrder,description,displayName,dataElements[id]]",
+                        fields: "programStageDataElements[compulsory,displayInReports,dataElement[id,name,formName,code,valueType,optionSetValue,optionSet[options[id,name,code]]]],programStageSections[id,name,sortOrder,description,displayName,dataElements[id]]",
                     },
                 },
                 me: {
@@ -143,7 +194,6 @@ export const initialQueryOptions = (engine: ReturnType<typeof useDataEngine>) =>
             let assignedDistricts = me.organisationUnits.filter(
                 (ou) => ou.level === 3,
             );
-
             const belowDistricts = me.organisationUnits.flatMap((ou) => {
                 if (ou.level === 1) {
                     return {
@@ -200,9 +250,9 @@ export const initialQueryOptions = (engine: ReturnType<typeof useDataEngine>) =>
                 ),
                 programStageDataElements: new Map(
                     programStage.programStageDataElements.map(
-                        ({ compulsory, dataElement }) => [
+                        ({ compulsory, dataElement, displayInReports }) => [
                             dataElement.id,
-                            { ...dataElement, compulsory },
+                            { ...dataElement, compulsory, displayInReports },
                         ],
                     ),
                 ),
