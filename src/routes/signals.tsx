@@ -24,6 +24,7 @@ import {
     Loading3QuartersOutlined,
     SearchOutlined,
 } from "@ant-design/icons";
+import { FilterDropdownProps } from "antd/es/table/interface";
 
 const nextLabels: Record<string, string> = {
     "0": "Create Signal",
@@ -293,16 +294,20 @@ function SignalsRouteComponent() {
                 confirm,
                 clearFilters,
                 close,
-            }: any) => (
+            }: FilterDropdownProps) => (
                 <div
                     style={{ padding: 8 }}
                     onKeyDown={(e) => e.stopPropagation()}
                 >
                     <DatePicker
                         onChange={(date, dateString) => {
-                            setSelectedKeys(dateString ? [dateString] : []);
+                            setSelectedKeys([dateString].flat());
                         }}
-                        value={selectedKeys[0] ? dayjs(selectedKeys[0]) : null}
+                        value={
+                            selectedKeys[0]
+                                ? dayjs(String(selectedKeys[0]))
+                                : null
+                        }
                         style={{ marginBottom: 8, display: "block" }}
                     />
                     <Space>
@@ -346,7 +351,7 @@ function SignalsRouteComponent() {
                 selectedKeys,
                 confirm,
                 clearFilters,
-            }: any) => (
+            }: FilterDropdownProps) => (
                 <div
                     style={{ padding: 8 }}
                     onKeyDown={(e) => e.stopPropagation()}
@@ -464,6 +469,7 @@ function SignalsRouteComponent() {
                         dayjs(a.eventDate).unix() - dayjs(b.eventDate).unix(),
                     defaultSortOrder: "descend",
                     fixed: "left",
+                    ...getColumnSearchProps(de),
                 };
             }
             return {
