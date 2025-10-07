@@ -4,8 +4,9 @@ import {
     createRouter,
     ErrorComponent,
 } from "@tanstack/react-router";
-import { Flex, Spin } from "antd";
+import { Flex, Spin, } from "antd";
 import React from "react";
+import { LoadingOutlined, Loading3QuartersOutlined } from "@ant-design/icons";
 import { RootRoute } from "./routes/__root";
 import { IndexRoute } from "./routes/index";
 import { SignalsIndexRoute, SignalsRoute } from "./routes/signals";
@@ -20,7 +21,7 @@ export const router = createRouter({
     routeTree,
     defaultPendingComponent: () => (
         <Flex justify="center" align="center" style={{ height: "100%" }}>
-            <Spin />
+            <Spin indicator={<Loading3QuartersOutlined spin />} />
         </Flex>
     ),
     defaultErrorComponent: ({ error }) => <ErrorComponent error={error} />,
@@ -29,3 +30,5 @@ export const router = createRouter({
     defaultPreloadStaleTime: 0,
     scrollRestoration: true,
 });
+
+

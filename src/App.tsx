@@ -20,6 +20,11 @@ const MyApp: FC = () => {
                 token: {
                     borderRadius: 5,
                 },
+                components: {
+                    Table: {
+                        rowHoverBg: "",
+                    },
+                },
             }}
         >
             <QueryClientProvider client={queryClient}>

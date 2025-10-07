@@ -26,6 +26,8 @@
         "@types/lodash": "^4.17.20",
         "antd": "^5.27.4",
         "dayjs": "^1.11.18",
+        "dexie": "^4.2.0",
+        "dexie-react-hooks": "^4.2.0",
         "lodash": "^4.17.21",
         "zod": "^4.1.11"
     }

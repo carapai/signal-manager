@@ -138,7 +138,7 @@ export const signalsQueryOptions = (
             }
             const { events } = (await engine.query({
                 events: {
-                    resource: "tracker/events",
+                    resource: "events",
                     params,
                 },
             })) as {
@@ -152,12 +152,14 @@ export const signalsQueryOptions = (
                     };
                 };
             };
+
+            console.log("Fetched events:", JSON.stringify(events, null, 2));
             return {
                 ...events,
                 events: events.events.map(({ dataValues, ...event }) => {
                     return {
                         ...event,
-                        ...fromPairs(
+                        dataValues: fromPairs(
                             dataValues.map((dv) => [dv.dataElement, dv.value]),
                         ),
                     };

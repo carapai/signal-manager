@@ -75,7 +75,6 @@ function SMSRouteComponent() {
 
     const onCreate = async (values: any) => {
         const { district, ...dataValues } = values;
-        console.log("Forwarding SMS: ", selectedSMS, " with values: ", values);
         if (!selectedSMS) return;
         const response = await engine.mutate({
             resource: "events",

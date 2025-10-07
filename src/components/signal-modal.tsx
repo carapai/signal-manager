@@ -14,33 +14,75 @@ import {
     Select,
     Tabs,
 } from "antd";
+import dayjs from "dayjs";
+import { orderBy, set } from "lodash";
+import { db } from "../db";
+import { SignalsRoute } from "../routes/signals";
+import { EventWithValues } from "../types";
 import { nextAction } from "../utils";
-import { orderBy } from "lodash";
 
 export default function SignalModal({
     open,
     setOpen,
     actions: { next, active },
+    values,
 }: {
     open: boolean;
     setOpen: (open: boolean) => void;
     onCreate: (values: any) => void;
     actions: ReturnType<typeof nextAction>;
+    values: EventWithValues | null;
 }) {
+    const [current, setCurrent] = React.useState<string>(() => next);
     const { programStageSections, programStageDataElements } = useLoaderData({
         from: "__root__",
     });
+    const { engine, queryClient } = SignalsRoute.useRouteContext();
+    const search = SignalsRoute.useSearch();
     const [form] = Form.useForm();
-    const onCreate = (values: any) => {
-        setOpen(false);
+    const onCreate = async (updatedValues: any) => {
+        if (values) {
+            const mergedValues: Record<string, string> = {
+                ...values.dataValues,
+                ...updatedValues,
+            };
+            const dataValues = Object.entries(mergedValues).flatMap(
+                ([key, value]: [string, any]) => {
+                    const element = programStageDataElements.get(key);
+                    if (element?.valueType === "BOOLEAN") {
+                        return {
+                            dataElement: key,
+                            value: value === "true",
+                        };
+                    } else if (value) {
+                        return { dataElement: key, value };
+                    }
+                    return [];
+                },
+            );
+            await db.events.put({ ...values, dataValues: mergedValues });
+            setOpen(false);
+            try {
+                await engine.mutate({
+                    resource: "events",
+                    type: "create",
+                    data: { events: [{ ...values, dataValues }] },
+                    params: { async: false },
+                });
+                await queryClient.invalidateQueries({
+                    queryKey: ["signals", search.q, search.dates],
+                });
+            } catch (error) {
+                await db.events.put(values);
+            }
+        }
     };
-    // const section = programStageSections[2];
     return (
         <Flex>
             <Modal
                 open={open}
-                title="Create a new signal"
-                okText="Create Signal"
+                title="Update Signal"
+                okText="Update Signal"
                 cancelText="Cancel Signal"
                 okButtonProps={{ autoFocus: true, htmlType: "submit" }}
                 onCancel={() => setOpen(false)}
@@ -50,7 +92,17 @@ export default function SignalModal({
                         layout="vertical"
                         form={form}
                         name="form_in_modal"
-                        initialValues={{}}
+                        initialValues={Object.entries(
+                            values?.dataValues ?? {},
+                        ).reduce((acc, [key, value]) => {
+                            const element = programStageDataElements.get(key);
+                            if (element?.valueType === "BOOLEAN") {
+                                set(acc, key, value === "true");
+                            } else {
+                                set(acc, key, value);
+                            }
+                            return acc;
+                        }, {})}
                         clearOnDestroy
                         onFinish={(values) => onCreate(values)}
                     >
@@ -66,6 +118,7 @@ export default function SignalModal({
                         "asc",
                     ).map((a) => {
                         return {
+                            tabKey: String(a.sortOrder),
                             key: String(a.sortOrder),
                             label: a.name,
                             disabled: !active.includes(String(a.sortOrder)),
@@ -89,8 +142,7 @@ export default function SignalModal({
                                                     )}
                                                 />
                                             );
-                                        }
-                                        if (
+                                        } else if (
                                             dataElement?.valueType === "BOOLEAN"
                                         ) {
                                             element = (
@@ -99,8 +151,7 @@ export default function SignalModal({
                                                         dataElement?.name}
                                                 </Checkbox>
                                             );
-                                        }
-                                        if (
+                                        } else if (
                                             dataElement?.valueType === "DATE" ||
                                             dataElement?.valueType ===
                                                 "DATETIME"
@@ -110,17 +161,14 @@ export default function SignalModal({
                                                     style={{ width: "100%" }}
                                                 />
                                             );
-                                        }
-                                        if (
+                                        } else if (
                                             dataElement?.valueType ===
                                             "LONG_TEXT"
                                         ) {
                                             element = (
                                                 <Input.TextArea rows={4} />
                                             );
-                                        }
-
-                                        if (
+                                        } else if (
                                             [
                                                 "NUMBER",
                                                 "INTEGER",
@@ -138,26 +186,63 @@ export default function SignalModal({
 
                                         return (
                                             <Col span={8} key={de}>
-                                                <Form.Item
-                                                    key={de}
-                                                    label={
-                                                        dataElement?.valueType ===
-                                                        "BOOLEAN"
-                                                            ? null
-                                                            : dataElement?.formName ??
-                                                              dataElement?.name
-                                                    }
-                                                    name={de}
-                                                    rules={[
-                                                        {
-                                                            required:
-                                                                dataElement?.compulsory,
-                                                            message: `${dataElement?.name} is required`,
-                                                        },
-                                                    ]}
-                                                >
-                                                    {element}
-                                                </Form.Item>
+                                                {dataElement?.valueType ===
+                                                    "DATE" ||
+                                                dataElement?.valueType ===
+                                                    "DATETIME" ? (
+                                                    <Form.Item
+                                                        key={de}
+                                                        label={
+                                                            dataElement?.formName ??
+                                                            dataElement?.name
+                                                        }
+                                                        name={de}
+                                                        rules={[
+                                                            {
+                                                                required:
+                                                                    dataElement?.compulsory,
+                                                                message: `${dataElement?.name} is required`,
+                                                            },
+                                                        ]}
+                                                        getValueProps={(
+                                                            value,
+                                                        ) => ({
+                                                            value: value
+                                                                ? dayjs(value)
+                                                                : null,
+                                                        })}
+                                                        normalize={(value) => {
+                                                            return value
+                                                                ? value.format(
+                                                                      "YYYY-MM-DD",
+                                                                  )
+                                                                : null;
+                                                        }}
+                                                    >
+                                                        {element}
+                                                    </Form.Item>
+                                                ) : (
+                                                    <Form.Item
+                                                        key={de}
+                                                        label={
+                                                            dataElement?.valueType ===
+                                                            "BOOLEAN"
+                                                                ? null
+                                                                : dataElement?.formName ??
+                                                                  dataElement?.name
+                                                        }
+                                                        name={de}
+                                                        rules={[
+                                                            {
+                                                                required:
+                                                                    dataElement?.compulsory,
+                                                                message: `${dataElement?.name} is required`,
+                                                            },
+                                                        ]}
+                                                    >
+                                                        {element}
+                                                    </Form.Item>
+                                                )}
                                             </Col>
                                         );
                                     })}
@@ -165,7 +250,10 @@ export default function SignalModal({
                             ),
                         };
                     })}
-                    activeKey={next}
+                    activeKey={current}
+                    onChange={(x) => {
+                        setCurrent(() => String(x));
+                    }}
                 />
             </Modal>
         </Flex>

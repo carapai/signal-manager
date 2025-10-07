@@ -47,39 +47,37 @@ export const SMSSchema = z.object({
     gatewayid: z.string(),
     text: z.string(),
     smsstatus: z.string(),
-		forwarded: z.boolean().optional(),
+    forwarded: z.boolean().optional(),
 });
 
 export const EventSchema = z.object({
+    programStage: z.string(),
+    programType: z.string(),
+    orgUnit: z.string(),
+    program: z.string(),
     event: z.string(),
     status: z.string(),
-    program: z.string(),
-    programStage: z.string(),
-    orgUnit: z.string(),
     orgUnitName: z.string(),
-    occurredAt: z.string(),
-    scheduledAt: z.string(),
-    storedBy: z.string(),
-    followup: z.boolean(),
+    eventDate: z.string(),
+    created: z.string(),
+    lastUpdated: z.string(),
     deleted: z.boolean(),
-    createdAt: z.string(),
-    updatedAt: z.string(),
     attributeOptionCombo: z.string(),
-    attributeCategoryOptions: z.string(),
-    assignedUser: z.object({}),
-    createdBy: UserSchema,
-    updatedBy: UserSchema,
     dataValues: z.array(
         z.object({
-            createdAt: z.string(),
-            updatedAt: z.string(),
-            providedElsewhere: z.boolean(),
+            lastUpdated: z.string(),
+            created: z.string(),
             dataElement: z.string(),
             value: z.string(),
+            providedElsewhere: z.boolean(),
             createdBy: UserSchema,
             updatedBy: UserSchema,
         }),
     ),
+    notes: z.array(z.unknown()),
+});
+export const EventWithValuesSchema = EventSchema.extend({
+    dataValues: z.record(z.string(), z.string().nullable()),
     notes: z.array(z.unknown()),
 });
 
@@ -127,5 +125,6 @@ export const ProgramStageSchema = z.object({
 
 export type SMS = z.infer<typeof SMSSchema>;
 export type Event = z.infer<typeof EventSchema>;
+export type EventWithValues = z.infer<typeof EventWithValuesSchema>;
 export type SMSSearchParams = z.infer<typeof SMSSearchParams>;
 export type ProgramStage = z.infer<typeof ProgramStageSchema>;
