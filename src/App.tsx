@@ -18,11 +18,45 @@ const MyApp: FC = () => {
         <ConfigProvider
             theme={{
                 token: {
-                    borderRadius: 5,
+                    borderRadius: 8,
+                    colorPrimary: "#667eea",
+                    colorInfo: "#667eea",
+                    colorSuccess: "#52c41a",
+                    colorWarning: "#faad14",
+                    colorError: "#ff4d4f",
+                    fontSize: 14,
+                    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                 },
                 components: {
                     Table: {
-                        rowHoverBg: "",
+                        rowHoverBg: "#f5f7fa",
+                        headerBg: "#fafafa",
+                        headerColor: "#262626",
+                        borderColor: "#f0f0f0",
+                    },
+                    Card: {
+                        borderRadiusLG: 8,
+                        boxShadowTertiary: "0 1px 2px rgba(0,0,0,0.03), 0 4px 12px rgba(0,0,0,0.05)",
+                    },
+                    Button: {
+                        borderRadius: 6,
+                        controlHeight: 36,
+                        fontWeight: 500,
+                    },
+                    Input: {
+                        borderRadius: 6,
+                        controlHeight: 38,
+                    },
+                    Select: {
+                        borderRadius: 6,
+                        controlHeight: 38,
+                    },
+                    Menu: {
+                        itemBg: "transparent",
+                        itemSelectedBg: "#f0f5ff",
+                        itemSelectedColor: "#667eea",
+                        itemHoverBg: "#fafafa",
+                        itemActiveBg: "#f0f5ff",
                     },
                 },
             }}

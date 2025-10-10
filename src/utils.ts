@@ -33,6 +33,44 @@ export const nextAction = (values: any) => {
     }
     return { next: "1", active: ["0", "1"] };
 };
+
+export const currentStatus = (values: any) => {
+    if (values.dataValues?.["VaO1WnueBpu"]) {
+        if (values.dataValues?.["x84ZTtD0Z8u"]) {
+            if (values.dataValues?.["x84ZTtD0Z8u"] === "Low") {
+                return { text: "Closed", color: "green" };
+            }
+            if (values.dataValues?.["x84ZTtD0Z8u"] === "Moderate") {
+                return { text: "Under Monitoring", color: "blue" };
+            }
+            if (values.dataValues?.["x84ZTtD0Z8u"] === "High") {
+                return { text: "Actioned", color: "orange" };
+            }
+            if (values.dataValues?.["x84ZTtD0Z8u"] === "Very High") {
+                return { text: "Critical", color: "crimson" };
+            }
+            return { text: "Closed", color: "green" };
+        }
+        return { text: "Assessed", color: "green" };
+    }
+    if (values.dataValues?.["FidiishnZJZ"] === "Discard") {
+        return { text: "Verified", color: "red" };
+    }
+    if (values.dataValues?.["FidiishnZJZ"] === "Alert") {
+        return { text: "Alerted", color: "orange" };
+    }
+    if (values.dataValues?.["RZMTtSyhdHY"] === "Relevant") {
+        return { text: "Reviewed", color: "blue" };
+    }
+
+    if (values.dataValues?.["RZMTtSyhdHY"] === "Discard") {
+        if (values.dataValues?.["LxWNKdd93lq"] === "Yes") {
+            return { text: "Duplicate", color: "red" };
+        }
+        return { text: "Triaged", color: "gray" };
+    }
+    return { text: "New", color: "gray" };
+};
 export const signalLevel = (values: any) => {
     const { x84ZTtD0Z8u: riskLevel } = values.dataValues;
     console.log("Risk level:", riskLevel);

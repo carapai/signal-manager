@@ -29,7 +29,6 @@ export default function SignalModal({
 }: {
     open: boolean;
     setOpen: (open: boolean) => void;
-    onCreate: (values: any) => void;
     actions: ReturnType<typeof nextAction>;
     values: EventWithValues | null;
 }) {
@@ -86,6 +85,7 @@ export default function SignalModal({
                 cancelText="Cancel Signal"
                 okButtonProps={{ autoFocus: true, htmlType: "submit" }}
                 onCancel={() => setOpen(false)}
+                styles={{ body: { maxHeight: "70vh", overflow: "auto" } }}
                 destroyOnHidden
                 modalRender={(dom) => (
                     <Form

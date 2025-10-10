@@ -1,16 +1,18 @@
+import { Loading3QuartersOutlined } from "@ant-design/icons";
 import { QueryClient } from "@tanstack/react-query";
 import {
     createHashHistory,
     createRouter,
     ErrorComponent,
 } from "@tanstack/react-router";
-import { Flex, Spin, } from "antd";
+import { Flex, Spin } from "antd";
 import React from "react";
-import { LoadingOutlined, Loading3QuartersOutlined } from "@ant-design/icons";
 import { RootRoute } from "./routes/__root";
 import { IndexRoute } from "./routes/index";
-import { SignalsIndexRoute, SignalsRoute } from "./routes/signals";
-import { SMSIndexRoute, SMSRoute } from "./routes/sms";
+import { SignalsRoute } from "./routes/signals";
+import { SignalsIndexRoute } from "./routes/signals.index";
+import { SMSRoute } from "./routes/sms";
+import { SMSIndexRoute } from "./routes/sms.index";
 
 const routeTree = RootRoute.addChildren([
     IndexRoute,
@@ -30,5 +32,3 @@ export const router = createRouter({
     defaultPreloadStaleTime: 0,
     scrollRestoration: true,
 });
-
-
