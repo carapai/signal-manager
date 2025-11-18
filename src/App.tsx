@@ -4,8 +4,8 @@ import { RouterProvider } from "@tanstack/react-router";
 import { ConfigProvider } from "antd";
 import React, { FC } from "react";
 import { router } from "./router";
+import { queryClient } from "./query-client";
 
-const queryClient = new QueryClient();
 declare module "@tanstack/react-router" {
     interface Register {
         router: typeof router;

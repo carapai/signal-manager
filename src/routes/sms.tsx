@@ -4,12 +4,14 @@ import { Card, Flex, Input } from "antd";
 import React from "react";
 import { SMSSearchParams } from "../types";
 import { RootRoute } from "./__root";
+import { SMSContext } from "../machines/sms";
 
 export const SMSRoute = createRoute({
     getParentRoute: () => RootRoute,
     path: "/sms",
     component: () => {
         const navigate = SMSRoute.useNavigate();
+        const { engine } = SMSRoute.useRouteContext();
         return (
             <Flex vertical gap={16} style={{ width: "100%", height: "100%" }}>
                 <Card
@@ -40,7 +42,16 @@ export const SMSRoute = createRoute({
                         />
                     </Flex>
                 </Card>
-                <Outlet />
+
+                <SMSContext.Provider
+                    options={{
+                        input: {
+                            engine,
+                        },
+                    }}
+                >
+                    <Outlet />
+                </SMSContext.Provider>
             </Flex>
         );
     },

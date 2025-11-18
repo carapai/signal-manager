@@ -1,5 +1,4 @@
 import { CheckCircleOutlined } from "@ant-design/icons";
-import { useSuspenseQuery } from "@tanstack/react-query";
 import { createRoute, useLoaderData } from "@tanstack/react-router";
 import {
     Button,
@@ -18,84 +17,97 @@ import {
     type TableProps,
 } from "antd";
 import dayjs from "dayjs";
-import React, { useState } from "react";
-import { smsQueryOptions } from "../collections";
-import { SMS } from "../types";
+import React, { useEffect, useState } from "react";
+import { SMSContext } from "../machines/sms";
+import { ProgramRuleResult, SMS } from "../types";
 import { SMSRoute } from "./sms";
+import { executeProgramRules } from "../utils";
 export const SMSIndexRoute = createRoute({
     getParentRoute: () => SMSRoute,
     path: "/",
     component: SMSRouteComponent,
-    loaderDeps: ({ search }) => search,
-    loader: ({ context: { queryClient, engine }, deps }) => {
-        return queryClient.ensureQueryData(smsQueryOptions(engine, deps));
-    },
 });
 
+const isDate = (valueType: string | undefined) => {
+    return (
+        valueType === "DATE" ||
+        valueType === "DATETIME" ||
+        valueType === "TIME" ||
+        valueType === "AGE"
+    );
+};
+
 function SMSRouteComponent() {
-    const { engine, queryClient } = SMSRoute.useRouteContext();
+    const [ruleResult, setRuleResult] = useState<ProgramRuleResult>({
+        hiddenFields: new Set<string>(),
+        assignments: {},
+        messages: [],
+        warnings: [],
+        shownFields: new Set<string>(),
+    });
+    const sms = SMSContext.useSelector((state) => state.context.sms);
+    const total = SMSContext.useSelector((state) => state.context.total);
+    const pending = SMSContext.useSelector((state) => state.context.pending);
+    const isSuccess = SMSContext.useSelector((state) =>
+        state.matches("success"),
+    );
+    const isLoading = SMSContext.useSelector((state) =>
+        state.matches("loading"),
+    );
+    const smsActorRef = SMSContext.useActorRef();
     const [open, setOpen] = useState(false);
     const [form] = Form.useForm();
     const navigate = SMSIndexRoute.useNavigate();
-    const programStage = useLoaderData({ from: "__root__" });
+    const {
+        programStageSections,
+        programStageDataElements,
+        programRuleVariables,
+        programRules,
+        assignedDistricts,
+    } = useLoaderData({ from: "__root__" });
     const search = SMSRoute.useSearch();
-    const { data } = useSuspenseQuery(smsQueryOptions(engine, search));
-    const [selectedSMS, setSelectedSMS] = useState<SMS | null>(null);
 
     const handleForward = (sms: SMS) => {
-        setSelectedSMS(sms);
         setOpen(true);
-        form.setFieldsValue({});
+        smsActorRef.send({ type: "SET_SMS", sms });
+        form.setFieldsValue(sms.event?.dataValues);
     };
 
     const onCreate = async (values: any) => {
         const { district, ...dataValues } = values;
-        if (!selectedSMS) return;
-        const response = await engine.mutate({
-            resource: "events",
-            type: "create",
-            data: {
-                events: [
-                    {
-                        event: selectedSMS.id,
-                        programStage: "Nnnqw1XKpZL",
-                        orgUnit: district,
-                        program: "iaN1DovM5em",
-                        eventDate: new Date().toISOString(),
-                        status: "ACTIVE",
-                        dataValues: Object.entries(dataValues).flatMap(
-                            ([dataElement, value]) => {
-                                if (value === undefined) return [];
-                                if (value === null) return [];
-                                if (value === false) return [];
-                                return { dataElement, value };
-                            },
-                        ),
-                    },
-                ],
-            },
-            params: {
-                async: false,
-            },
+        smsActorRef.send({
+            type: "CREATE_SIGNAL",
+            district,
+            dataValues,
         });
-        queryClient.setQueryData(
-            smsQueryOptions(engine, search).queryKey,
-            (old: any) => {
-                if (!old) return old;
-                return (old as SMS[]).map((sms) => {
-                    if (sms.id === selectedSMS.id) {
-                        return {
-                            ...sms,
-                            forwarded: true,
-                        };
-                    }
-                    return sms;
-                });
-            },
-        );
         setOpen(false);
         form.resetFields();
     };
+
+    const evaluateRules = (currentValues: Record<string, any>) => {
+        const result = executeProgramRules({
+            programRules,
+            programRuleVariables,
+            dataValues: currentValues,
+        });
+
+        setRuleResult(result);
+        for (const [key, value] of Object.entries(result.assignments)) {
+            form.setFieldValue(key, value);
+        }
+    };
+
+    useEffect(() => {
+        if (pending) {
+            evaluateRules(pending.event?.dataValues ?? {});
+        }
+    }, [open, pending?.event?.dataValues]);
+
+    useEffect(() => {
+        if (isSuccess) {
+            smsActorRef.send({ type: "FETCH_NEXT_PAGE", search });
+        }
+    }, Object.values(search).sort());
 
     const columns: TableProps<SMS>["columns"] = [
         {
@@ -109,7 +121,7 @@ function SMSRouteComponent() {
                         Forwarded
                     </Tag>
                 ) : (
-                    <Tag color="default">Pending</Tag>
+                    <Tag color="default">Open</Tag>
                 ),
         },
         {
@@ -160,6 +172,10 @@ function SMSRouteComponent() {
         },
     ];
 
+    const handleValuesChange = (_changed: any, allValues: any) => {
+        evaluateRules(allValues);
+    };
+
     return (
         <Card
             variant="borderless"
@@ -175,10 +191,10 @@ function SMSRouteComponent() {
             <div style={{ flex: 1, overflow: "auto" }}>
                 <Table
                     columns={columns}
-                    dataSource={data.inboundsmss}
+                    dataSource={sms}
                     rowKey="id"
                     pagination={{
-                        total: data.pager.total,
+                        total,
                         current: search.page,
                         pageSize: search.pageSize,
                         onChange: (page, pageSize) => {
@@ -190,7 +206,6 @@ function SMSRouteComponent() {
                                         pageSize,
                                     }),
                                 });
-                                return;
                             } else {
                                 navigate({
                                     search: (prev) => ({
@@ -205,6 +220,7 @@ function SMSRouteComponent() {
                             `${range[0]}-${range[1]} of ${total} messages`,
                     }}
                     size="middle"
+                    loading={isLoading}
                 />
             </div>
             <Modal
@@ -227,13 +243,23 @@ function SMSRouteComponent() {
                         initialValues={{}}
                         clearOnDestroy
                         onFinish={(values) => onCreate(values)}
+                        onValuesChange={handleValuesChange}
                     >
                         {dom}
                     </Form>
                 )}
                 width="70%"
+                styles={{
+                    body: {
+                        maxHeight: "70vh",
+                        overflow: "auto",
+                        padding: 0,
+                        margin: 0,
+                    },
+                    content: {},
+                }}
             >
-                <Row gutter={24}>
+                <Row gutter={24} style={{ padding: 0, margin: 0 }}>
                     <Col span={8}>
                         <Form.Item
                             label="District"
@@ -246,7 +272,7 @@ function SMSRouteComponent() {
                             ]}
                         >
                             <Select
-                                options={programStage.assignedDistricts}
+                                options={assignedDistricts}
                                 showSearch
                                 placeholder="Select a district"
                                 filterOption={(input, option) =>
@@ -259,76 +285,82 @@ function SMSRouteComponent() {
                             />
                         </Form.Item>
                     </Col>
-                    {programStage.programStageSections[0].dataElements.map(
-                        (de) => {
-                            const dataElement =
-                                programStage.programStageDataElements.get(de);
-                            let element = <Input />;
-                            if (
-                                dataElement?.optionSetValue &&
-                                dataElement?.optionSet
-                            ) {
-                                element = (
-                                    <Select
-                                        options={dataElement.optionSet.options.map(
-                                            (option) => ({
-                                                label: option.name,
-                                                value: option.code,
-                                            }),
-                                        )}
-                                    />
-                                );
-                            }
-                            if (dataElement?.valueType === "BOOLEAN") {
-                                element = <Input type="checkbox" />;
-                            }
-                            if (
-                                dataElement?.valueType === "DATE" ||
-                                dataElement?.valueType === "DATETIME"
-                            ) {
-                                element = (
-                                    <DatePicker style={{ width: "100%" }} />
-                                );
-                            }
-                            if (dataElement?.valueType === "LONG_TEXT") {
-                                element = <Input.TextArea rows={4} />;
-                            }
-
-                            if (
-                                [
-                                    "NUMBER",
-                                    "INTEGER",
-                                    "INTEGER_POSITIVE",
-                                ].includes(dataElement?.valueType ?? "")
-                            ) {
-                                element = (
-                                    <InputNumber style={{ width: "100%" }} />
-                                );
-                            }
-
-                            return (
-                                <Col span={8} key={de}>
-                                    <Form.Item
-                                        key={de}
-                                        label={
-                                            dataElement?.formName ??
-                                            dataElement?.name
-                                        }
-                                        name={de}
-                                        rules={[
-                                            {
-                                                required:
-                                                    dataElement?.compulsory,
-                                                message: `${dataElement?.name} is required`,
-                                            },
-                                        ]}
-                                    >
-                                        {element}
-                                    </Form.Item>
-                                </Col>
+                    {programStageSections[0].dataElements.map((de) => {
+                        const dataElement = programStageDataElements.get(de);
+                        if (ruleResult.hiddenFields.has(de)) return null;
+                        let element = <Input />;
+                        if (
+                            dataElement?.optionSetValue &&
+                            dataElement?.optionSet
+                        ) {
+                            element = (
+                                <Select
+                                    options={dataElement.optionSet.options.map(
+                                        (option) => ({
+                                            label: option.name,
+                                            value: option.code,
+                                        }),
+                                    )}
+                                />
                             );
-                        },
-                    )}
+                        }
+                        if (dataElement?.valueType === "BOOLEAN") {
+                            element = <Input type="checkbox" />;
+                        }
+                        if (isDate(dataElement?.valueType)) {
+                            element = <DatePicker style={{ width: "100%" }} />;
+                        }
+                        if (dataElement?.valueType === "LONG_TEXT") {
+                            element = <Input.TextArea rows={4} />;
+                        }
+
+                        if (
+                            ["NUMBER", "INTEGER", "INTEGER_POSITIVE"].includes(
+                                dataElement?.valueType ?? "",
+                            )
+                        ) {
+                            element = <InputNumber style={{ width: "100%" }} />;
+                        }
+
+                        return (
+                            <Col span={8} key={de}>
+                                <Form.Item
+                                    key={de}
+                                    label={
+                                        dataElement?.formName ??
+                                        dataElement?.name
+                                    }
+                                    name={de}
+                                    rules={[
+                                        {
+                                            required: dataElement?.compulsory,
+                                            message: `${dataElement?.name} is required`,
+                                        },
+                                    ]}
+                                    getValueProps={
+                                        isDate(dataElement?.valueType)
+                                            ? (value) =>
+                                                  isDate(dataElement?.valueType)
+                                                      ? {
+                                                            value: value
+                                                                ? dayjs(value)
+                                                                : null,
+                                                        }
+                                                      : {}
+                                            : undefined
+                                    }
+                                    normalize={(value) =>
+                                        isDate(dataElement?.valueType) &&
+                                        dayjs.isDayjs(value)
+                                            ? value.format("YYYY-MM-DD")
+                                            : value
+                                    }
+                                >
+                                    {element}
+                                </Form.Item>
+                            </Col>
+                        );
+                    })}
                 </Row>
             </Modal>
         </Card>

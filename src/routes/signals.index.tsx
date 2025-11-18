@@ -3,6 +3,8 @@ import {
     Button,
     Card,
     DatePicker,
+    Flex,
+    FloatButton,
     Input,
     InputRef,
     Space,
@@ -22,7 +24,11 @@ import {
     useDexieInfiniteTableQuery,
 } from "../utils";
 
-import { Loading3QuartersOutlined, SearchOutlined } from "@ant-design/icons";
+import {
+    Loading3QuartersOutlined,
+    PlusOutlined,
+    SearchOutlined,
+} from "@ant-design/icons";
 import { FilterDropdownProps } from "antd/es/table/interface";
 import { SignalsRoute } from "./signals";
 
@@ -48,7 +54,7 @@ export const SignalsIndexRoute = createRoute({
 
 function SignalsRouteComponent() {
     const [open, setOpen] = useState(false);
-    const { engine, queryClient } = SignalsRoute.useRouteContext();
+    const { engine } = SignalsRoute.useRouteContext();
     const { programStageDataElements } = useLoaderData({ from: "__root__" });
     const search = SignalsRoute.useSearch();
     const dataElements = Array.from(programStageDataElements.values()).filter(
@@ -239,7 +245,9 @@ function SignalsRouteComponent() {
 
         if (
             dataIndex.valueType === "DATE" ||
-            dataIndex.valueType === "DATETIME"
+            dataIndex.valueType === "DATETIME" ||
+            dataIndex.valueType === "TIME" ||
+            dataIndex.valueType === "AGE"
         ) {
             filterDropdown = ({
                 setSelectedKeys,
@@ -405,6 +413,8 @@ function SignalsRouteComponent() {
                         );
                     },
                     width: 100,
+                    align: "center",
+                    fixed: "left",
                 };
             }
             if (de.id === "actions") {
@@ -421,6 +431,7 @@ function SignalsRouteComponent() {
                                     background:
                                         "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                                     border: "none",
+                                    width: 100,
                                 }}
                             >
                                 {nextLabels[action.next] || "View"}
@@ -435,7 +446,7 @@ function SignalsRouteComponent() {
 
             if (de.id === "eventDate") {
                 return {
-                    title: de.formName || de.name,
+                    title: <span>Date of Report</span>,
                     key: de.id,
                     render: (_, record) => {
                         return (
@@ -487,7 +498,10 @@ function SignalsRouteComponent() {
                     }
                     if (
                         val &&
-                        (de.valueType === "DATE" || de.valueType === "DATETIME")
+                        (de.valueType === "DATE" ||
+                            de.valueType === "DATETIME" ||
+                            de.valueType === "TIME" ||
+                            de.valueType === "AGE")
                     ) {
                         return dayjs(String(val)).format("DD/MM/YYYY");
                     }
@@ -499,38 +513,49 @@ function SignalsRouteComponent() {
     }, [dataElements]);
 
     return (
-        <Card
-            variant="borderless"
-            style={{
-                boxShadow:
-                    "0 1px 2px rgba(0,0,0,0.03), 0 4px 12px rgba(0,0,0,0.05)",
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-            }}
-            styles={{ body: { padding: 0 } }}
-        >
-            <div style={{ flex: 1, overflow: "auto" }}>
-                <Table
-                    columns={columns}
-                    dataSource={data}
-                    rowKey="event"
-                    pagination={false}
-                    scroll={{ y: "calc(100vh - 286px)", x: "max-content" }}
-                    loading={{
-                        spinning: isFetching || isFetchingNextPage,
-                        indicator: <Loading3QuartersOutlined spin />,
-                    }}
-                    size="middle"
-                />
-            </div>
+        <Flex vertical gap={16} style={{ width: "100%", height: "100%" }}>
+            {/* <Card
+                variant="borderless"
+                style={{
+                    boxShadow:
+                        "0 1px 2px rgba(0,0,0,0.03), 0 4px 12px rgba(0,0,0,0.05)",
+                    display: "flex",
+                    flexDirection: "column",
+                }}
+                // styles={{ body: { padding: 0 } }}
+            >
+            </Card> */}
 
+            <Table
+                columns={columns}
+                dataSource={data}
+                rowKey="event"
+                pagination={false}
+                scroll={{ y: "calc(100vh - 300px)", x: "max-content" }}
+                loading={{
+                    spinning: isFetching || isFetchingNextPage,
+                    indicator: <Loading3QuartersOutlined spin />,
+                }}
+                size="middle"
+            />
             <SignalModal
                 open={open}
                 setOpen={(open) => setOpen(() => open)}
                 actions={actions}
                 values={currentEvent}
             />
-        </Card>
+            <FloatButton
+                shape="circle"
+                type="primary"
+                style={
+                    {
+                        // insetInlineEnd: 72,
+                        // insetBlockStart: "calc(100vh - 72px)",
+                    }
+                }
+                tooltip="New Signal"
+                icon={<PlusOutlined />}
+            />
+        </Flex>
     );
 }
