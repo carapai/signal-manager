@@ -21,7 +21,7 @@ import React, { useEffect, useState } from "react";
 import { SMSContext } from "../machines/sms";
 import { ProgramRuleResult, SMS } from "../types";
 import { SMSRoute } from "./sms";
-import { executeProgramRules } from "../utils";
+import { executeProgramRules } from "../utils/utils";
 export const SMSIndexRoute = createRoute({
     getParentRoute: () => SMSRoute,
     path: "/",
@@ -66,18 +66,16 @@ function SMSRouteComponent() {
         assignedDistricts,
     } = useLoaderData({ from: "__root__" });
     const search = SMSRoute.useSearch();
-
     const handleForward = (sms: SMS) => {
         setOpen(true);
         smsActorRef.send({ type: "SET_SMS", sms });
         form.setFieldsValue(sms.event?.dataValues);
     };
-
     const onCreate = async (values: any) => {
-        const { district, ...dataValues } = values;
+        const { orgUnit, ...dataValues } = values;
         smsActorRef.send({
             type: "CREATE_SIGNAL",
-            district,
+            orgUnit,
             dataValues,
         });
         setOpen(false);
@@ -263,7 +261,7 @@ function SMSRouteComponent() {
                     <Col span={8}>
                         <Form.Item
                             label="District"
-                            name="district"
+                            name="orgUnit"
                             rules={[
                                 {
                                     required: true,

@@ -1,19 +1,29 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { createRoute } from "@tanstack/react-router";
-import React from "react";
-import { smsQueryOptions, signalsQueryOptions } from "../collections";
-import { RootRoute } from "./__root";
-import { Card, Col, Row, Statistic, Typography, Flex, Tag, Space, Table } from "antd";
 import {
+    AlertOutlined,
     BellOutlined,
-    MailOutlined,
     CheckCircleOutlined,
     ExclamationCircleOutlined,
-    AlertOutlined,
+    MailOutlined,
 } from "@ant-design/icons";
-import dayjs from "dayjs";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { createRoute } from "@tanstack/react-router";
 import type { TableProps } from "antd";
+import {
+    Card,
+    Col,
+    Flex,
+    Row,
+    Space,
+    Statistic,
+    Table,
+    Tag,
+    Typography,
+} from "antd";
+import dayjs from "dayjs";
+import React from "react";
+import { signalsQueryOptions, smsQueryOptions } from "../collections";
 import type { SMS } from "../types";
+import { RootRoute } from "./__root";
 
 export const IndexRoute = createRoute({
     getParentRoute: () => RootRoute,
@@ -25,7 +35,10 @@ export const IndexRoute = createRoute({
             smsQueryOptions(opts.context.engine),
         );
         const signalsPromise = opts.context.queryClient.ensureQueryData(
-            signalsQueryOptions(opts.context.engine),
+            signalsQueryOptions(opts.context.engine, {
+                filters: {},
+                pagination: { current: 1, pageSize: 500 },
+            }),
         );
         return Promise.all([smsPromise, signalsPromise]);
     },
@@ -34,11 +47,20 @@ export const IndexRoute = createRoute({
 function IndexRouteComponent() {
     const { engine } = IndexRoute.useRouteContext();
     const { data: smsData } = useSuspenseQuery(smsQueryOptions(engine));
-    const { data: signalsData } = useSuspenseQuery(signalsQueryOptions(engine));
+    const { data: signalsData } = useSuspenseQuery(
+        signalsQueryOptions(engine, {
+            filters: {},
+            pagination: { current: 1, pageSize: 500 },
+        }),
+    );
 
-    const forwardedCount = smsData.inboundsmss.filter((sms) => sms.forwarded).length;
-    const pendingCount = smsData.inboundsmss.filter((sms) => !sms.forwarded).length;
-    
+    const forwardedCount = smsData.inboundsmss.filter(
+        (sms) => sms.forwarded,
+    ).length;
+    const pendingCount = smsData.inboundsmss.filter(
+        (sms) => !sms.forwarded,
+    ).length;
+
     const riskCounts = signalsData.events.reduce((acc, event) => {
         const riskLevel = event.dataValues["x84ZTtD0Z8u"] || "Unknown";
         acc[riskLevel] = (acc[riskLevel] || 0) + 1;
@@ -47,9 +69,9 @@ function IndexRouteComponent() {
 
     const riskColors: Record<string, string> = {
         "Very High": "#ff4d4f",
-        "High": "#ff7a45",
-        "Moderate": "#ffa940",
-        "Low": "#fadb14",
+        High: "#ff7a45",
+        Moderate: "#ffa940",
+        Low: "#fadb14",
     };
 
     const smsColumns: TableProps<SMS>["columns"] = [
@@ -89,7 +111,9 @@ function IndexRouteComponent() {
         },
     ];
 
-    const signalsColumns: TableProps<typeof signalsData.events[0]>["columns"] = [
+    const signalsColumns: TableProps<
+        (typeof signalsData.events)[0]
+    >["columns"] = [
         {
             title: "Risk Level",
             dataIndex: "dataValues",
@@ -98,7 +122,10 @@ function IndexRouteComponent() {
             render: (dataValues) => {
                 const val = dataValues["x84ZTtD0Z8u"];
                 return val ? (
-                    <Tag color={riskColors[val] || "default"} style={{ fontSize: 13, fontWeight: 500 }}>
+                    <Tag
+                        color={riskColors[val] || "default"}
+                        style={{ fontSize: 13, fontWeight: 500 }}
+                    >
                         {val}
                     </Tag>
                 ) : null;
@@ -124,12 +151,26 @@ function IndexRouteComponent() {
     ];
 
     return (
-        <Flex vertical gap={24} style={{ height: "100%", overflow: "auto", padding: 8 }}>
+        <Flex
+            vertical
+            gap={24}
+            style={{ height: "100%", overflow: "auto", padding: 8 }}
+        >
             <Flex justify="space-between" align="center">
-                <Typography.Title level={2} style={{ margin: 0, fontWeight: 700 }}>
+                <Typography.Title
+                    level={2}
+                    style={{ margin: 0, fontWeight: 700 }}
+                >
                     Dashboard Overview
                 </Typography.Title>
-                <Tag color="blue" style={{ fontSize: 14, padding: "6px 16px", fontWeight: 500 }}>
+                <Tag
+                    color="blue"
+                    style={{
+                        fontSize: 14,
+                        padding: "6px 16px",
+                        fontWeight: 500,
+                    }}
+                >
                     {dayjs().format("DD MMMM YYYY")}
                 </Tag>
             </Flex>
@@ -139,22 +180,39 @@ function IndexRouteComponent() {
                     <Card
                         bordered={false}
                         style={{
-                            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                            background:
+                                "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                             boxShadow: "0 8px 24px rgba(102, 126, 234, 0.4)",
                             minHeight: 160,
                         }}
                         bodyStyle={{ padding: 24 }}
                     >
-                        <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                            <MailOutlined style={{ fontSize: 40, color: "white" }} />
+                        <Space
+                            direction="vertical"
+                            size={8}
+                            style={{ width: "100%" }}
+                        >
+                            <MailOutlined
+                                style={{ fontSize: 40, color: "white" }}
+                            />
                             <Statistic
                                 title={
-                                    <span style={{ color: "rgba(255,255,255,0.95)", fontSize: 16, fontWeight: 500 }}>
+                                    <span
+                                        style={{
+                                            color: "rgba(255,255,255,0.95)",
+                                            fontSize: 16,
+                                            fontWeight: 500,
+                                        }}
+                                    >
                                         Total SMS
                                     </span>
                                 }
                                 value={smsData.pager.total}
-                                valueStyle={{ color: "white", fontSize: 42, fontWeight: 700 }}
+                                valueStyle={{
+                                    color: "white",
+                                    fontSize: 42,
+                                    fontWeight: 700,
+                                }}
                             />
                         </Space>
                     </Card>
@@ -163,22 +221,39 @@ function IndexRouteComponent() {
                     <Card
                         bordered={false}
                         style={{
-                            background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+                            background:
+                                "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
                             boxShadow: "0 8px 24px rgba(240, 147, 251, 0.4)",
                             minHeight: 160,
                         }}
                         bodyStyle={{ padding: 24 }}
                     >
-                        <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                            <BellOutlined style={{ fontSize: 40, color: "white" }} />
+                        <Space
+                            direction="vertical"
+                            size={8}
+                            style={{ width: "100%" }}
+                        >
+                            <BellOutlined
+                                style={{ fontSize: 40, color: "white" }}
+                            />
                             <Statistic
                                 title={
-                                    <span style={{ color: "rgba(255,255,255,0.95)", fontSize: 16, fontWeight: 500 }}>
+                                    <span
+                                        style={{
+                                            color: "rgba(255,255,255,0.95)",
+                                            fontSize: 16,
+                                            fontWeight: 500,
+                                        }}
+                                    >
                                         Total Signals
                                     </span>
                                 }
                                 value={signalsData.pager.total}
-                                valueStyle={{ color: "white", fontSize: 42, fontWeight: 700 }}
+                                valueStyle={{
+                                    color: "white",
+                                    fontSize: 42,
+                                    fontWeight: 700,
+                                }}
                             />
                         </Space>
                     </Card>
@@ -187,22 +262,39 @@ function IndexRouteComponent() {
                     <Card
                         bordered={false}
                         style={{
-                            background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+                            background:
+                                "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
                             boxShadow: "0 8px 24px rgba(79, 172, 254, 0.4)",
                             minHeight: 160,
                         }}
                         bodyStyle={{ padding: 24 }}
                     >
-                        <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                            <CheckCircleOutlined style={{ fontSize: 40, color: "white" }} />
+                        <Space
+                            direction="vertical"
+                            size={8}
+                            style={{ width: "100%" }}
+                        >
+                            <CheckCircleOutlined
+                                style={{ fontSize: 40, color: "white" }}
+                            />
                             <Statistic
                                 title={
-                                    <span style={{ color: "rgba(255,255,255,0.95)", fontSize: 16, fontWeight: 500 }}>
+                                    <span
+                                        style={{
+                                            color: "rgba(255,255,255,0.95)",
+                                            fontSize: 16,
+                                            fontWeight: 500,
+                                        }}
+                                    >
                                         Forwarded
                                     </span>
                                 }
                                 value={forwardedCount}
-                                valueStyle={{ color: "white", fontSize: 42, fontWeight: 700 }}
+                                valueStyle={{
+                                    color: "white",
+                                    fontSize: 42,
+                                    fontWeight: 700,
+                                }}
                             />
                         </Space>
                     </Card>
@@ -211,22 +303,39 @@ function IndexRouteComponent() {
                     <Card
                         bordered={false}
                         style={{
-                            background: "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
+                            background:
+                                "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
                             boxShadow: "0 8px 24px rgba(250, 112, 154, 0.4)",
                             minHeight: 160,
                         }}
                         bodyStyle={{ padding: 24 }}
                     >
-                        <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                            <ExclamationCircleOutlined style={{ fontSize: 40, color: "white" }} />
+                        <Space
+                            direction="vertical"
+                            size={8}
+                            style={{ width: "100%" }}
+                        >
+                            <ExclamationCircleOutlined
+                                style={{ fontSize: 40, color: "white" }}
+                            />
                             <Statistic
                                 title={
-                                    <span style={{ color: "rgba(255,255,255,0.95)", fontSize: 16, fontWeight: 500 }}>
+                                    <span
+                                        style={{
+                                            color: "rgba(255,255,255,0.95)",
+                                            fontSize: 16,
+                                            fontWeight: 500,
+                                        }}
+                                    >
                                         Pending
                                     </span>
                                 }
                                 value={pendingCount}
-                                valueStyle={{ color: "white", fontSize: 42, fontWeight: 700 }}
+                                valueStyle={{
+                                    color: "white",
+                                    fontSize: 42,
+                                    fontWeight: 700,
+                                }}
                             />
                         </Space>
                     </Card>
@@ -236,15 +345,22 @@ function IndexRouteComponent() {
             <Card
                 title={
                     <Flex align="center" gap={12}>
-                        <AlertOutlined style={{ color: "#667eea", fontSize: 20 }} />
-                        <span style={{ fontSize: 18, fontWeight: 600 }}>Risk Level Distribution</span>
+                        <AlertOutlined
+                            style={{ color: "#667eea", fontSize: 20 }}
+                        />
+                        <span style={{ fontSize: 18, fontWeight: 600 }}>
+                            Risk Level Distribution
+                        </span>
                     </Flex>
                 }
                 bordered={false}
                 style={{
                     boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
                 }}
-                headStyle={{ borderBottom: "2px solid #f0f0f0", padding: "20px 24px" }}
+                headStyle={{
+                    borderBottom: "2px solid #f0f0f0",
+                    padding: "20px 24px",
+                }}
             >
                 <Row gutter={[20, 20]}>
                     {Object.entries(riskCounts).map(([level, count]) => (
@@ -252,16 +368,25 @@ function IndexRouteComponent() {
                             <Card
                                 bordered={false}
                                 style={{
-                                    background: `${riskColors[level] || "#d9d9d9"}20`,
-                                    borderLeft: `6px solid ${riskColors[level] || "#d9d9d9"}`,
+                                    background: `${
+                                        riskColors[level] || "#d9d9d9"
+                                    }20`,
+                                    borderLeft: `6px solid ${
+                                        riskColors[level] || "#d9d9d9"
+                                    }`,
                                     boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
                                     minHeight: 120,
                                 }}
-                                bodyStyle={{ padding: 20 }}
+                                styles={{ body: { padding: 20 } }}
                             >
                                 <Statistic
                                     title={
-                                        <span style={{ fontSize: 15, fontWeight: 500 }}>
+                                        <span
+                                            style={{
+                                                fontSize: 15,
+                                                fontWeight: 500,
+                                            }}
+                                        >
                                             {level}
                                         </span>
                                     }
@@ -290,7 +415,10 @@ function IndexRouteComponent() {
                         style={{
                             boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
                         }}
-                        headStyle={{ borderBottom: "2px solid #f0f0f0", padding: "20px 24px" }}
+                        headStyle={{
+                            borderBottom: "2px solid #f0f0f0",
+                            padding: "20px 24px",
+                        }}
                         bodyStyle={{ padding: 0 }}
                     >
                         <Table
@@ -301,7 +429,9 @@ function IndexRouteComponent() {
                             size="middle"
                             onRow={(record) => ({
                                 style: {
-                                    backgroundColor: record.forwarded ? "#f6ffed" : "transparent",
+                                    backgroundColor: record.forwarded
+                                        ? "#f6ffed"
+                                        : "transparent",
                                 },
                             })}
                         />
@@ -318,7 +448,10 @@ function IndexRouteComponent() {
                         style={{
                             boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
                         }}
-                        headStyle={{ borderBottom: "2px solid #f0f0f0", padding: "20px 24px" }}
+                        headStyle={{
+                            borderBottom: "2px solid #f0f0f0",
+                            padding: "20px 24px",
+                        }}
                         bodyStyle={{ padding: 0 }}
                     >
                         <Table
@@ -329,8 +462,16 @@ function IndexRouteComponent() {
                             size="middle"
                             onRow={(record) => ({
                                 style: {
-                                    backgroundColor: record.dataValues["x84ZTtD0Z8u"] 
-                                        ? `${riskColors[record.dataValues["x84ZTtD0Z8u"]]}10` 
+                                    backgroundColor: record.dataValues[
+                                        "x84ZTtD0Z8u"
+                                    ]
+                                        ? `${
+                                              riskColors[
+                                                  record.dataValues[
+                                                      "x84ZTtD0Z8u"
+                                                  ]
+                                              ]
+                                          }10`
                                         : "transparent",
                                 },
                             })}

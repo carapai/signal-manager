@@ -1,7 +1,8 @@
 import { QueryKey, useInfiniteQuery } from "@tanstack/react-query";
 import type { Table } from "dexie";
 import { useLiveQuery } from "dexie-react-hooks";
-import { ProgramRule, ProgramRuleResult, ProgramRuleVariable } from "./types";
+import { ProgramRule, ProgramRuleResult, ProgramRuleVariable } from "../types";
+import { Dictionary } from "lodash";
 
 interface UseDexieInfiniteTableQueryOptions<T> {
     table: Table<T, any>;
@@ -16,58 +17,34 @@ interface UseDexieInfiniteTableQueryOptions<T> {
     filterFn?: (item: T) => boolean;
 }
 
-export const nextAction = (values: any) => {
-    if (values.dataValues?.["VaO1WnueBpu"]) {
+export const nextAction = (dataValues: Dictionary<string>) => {
+    if (dataValues["VaO1WnueBpu"]) {
         return { next: "", active: ["0", "1", "2", "3"] };
     }
-    if (values.dataValues?.["FidiishnZJZ"] === "Discard") {
+    if (dataValues["FidiishnZJZ"] === "Discard") {
         return { next: "", active: ["0", "1", "2"] };
     }
-    if (values.dataValues?.["FidiishnZJZ"] === "Alert") {
+    if (dataValues["FidiishnZJZ"] === "Alert") {
         return { next: "3", active: ["0", "1", "2", "3"] };
     }
-    if (values.dataValues?.["RZMTtSyhdHY"] === "Discard") {
+    if (dataValues["RZMTtSyhdHY"] === "Discard") {
         return { next: "", active: ["0", "1"] };
     }
-    if (values.dataValues?.["RZMTtSyhdHY"] === "Relevant") {
+    if (dataValues["RZMTtSyhdHY"] === "Relevant") {
         return { next: "2", active: ["0", "1", "2"] };
     }
-    return { next: "1", active: ["0", "1"] };
+    return { next: "0", active: ["0", "1"] };
 };
 
 export const currentStatus = (values: any) => {
     if (values.dataValues?.["VaO1WnueBpu"]) {
-        // if (values.dataValues?.["x84ZTtD0Z8u"]) {
-        //     if (values.dataValues?.["x84ZTtD0Z8u"] === "Low") {
-        //         return { text: "Closed", color: "green" };
-        //     }
-        //     if (values.dataValues?.["x84ZTtD0Z8u"] === "Moderate") {
-        //         return { text: "Under Monitoring", color: "blue" };
-        //     }
-        //     if (values.dataValues?.["x84ZTtD0Z8u"] === "High") {
-        //         return { text: "Actioned", color: "orange" };
-        //     }
-        //     if (values.dataValues?.["x84ZTtD0Z8u"] === "Very High") {
-        //         return { text: "Critical", color: "crimson" };
-        //     }
-        //     return { text: "Closed", color: "green" };
-        // }
         return { text: "Assessed", color: "green" };
     }
     if (values.dataValues?.["FidiishnZJZ"]) {
         return { text: "Verified", color: "yellow" };
     }
-    // if (values.dataValues?.["FidiishnZJZ"] === "Alert") {
-    //     return { text: "Alerted", color: "orange" };
-    // }
-    // if (values.dataValues?.["RZMTtSyhdHY"] === "Relevant") {
-    //     return { text: "Reviewed", color: "blue" };
-    // }
 
     if (values.dataValues?.["RZMTtSyhdHY"]) {
-        // if (values.dataValues?.["LxWNKdd93lq"] === "Yes") {
-        //     return { text: "Duplicate", color: "red" };
-        // }
         return { text: "Triaged", color: "red" };
     }
     return { text: "Open", color: "gray" };
@@ -193,21 +170,26 @@ export function executeProgramRules({
         }
         variableValues[variable.name] = value ?? null;
     }
+
     // Step 2: Safely evaluate rule condition
     const evaluateCondition = (condition: string): boolean => {
         const safeCond = condition.replace(/#\{(\w+)\}/g, (_, name) => {
             const val = variableValues[name];
             if (typeof val === "string") return `'${val}'`;
-            if (val === null || val === undefined) return "null";
+            if (val === null || val === undefined || val === "''")
+                return "null";
+
+            console.log("Variable value:", name, val);
             return val;
         });
 
         try {
-            // eslint-disable-next-line no-new-func
-            const value = new Function(`return (${safeCond})`)();
+            const value = new Function(
+                `return (${safeCond.replace("!=", "!==")})`,
+            )();
             return value;
         } catch (err) {
-            console.warn(`Invalid condition: ${condition}`, err);
+            console.warn(`Invalid condition: ${condition}`, safeCond);
             return false;
         }
     };

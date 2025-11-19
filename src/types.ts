@@ -1,3 +1,5 @@
+import { TablePaginationConfig } from "antd";
+import { FilterValue } from "antd/es/table/interface";
 import { z } from "zod";
 const UserSchema = z.object({
     uid: z.string(),
@@ -196,4 +198,8 @@ export type ProgramRuleResult = {
     shownFields: Set<string>;
     messages: string[];
     warnings: string[];
+};
+export type OnChange = {
+    pagination: TablePaginationConfig;
+    filters: Record<string, FilterValue | null>;
 };

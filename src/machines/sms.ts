@@ -12,7 +12,7 @@ interface SMSContext {
     engine: ReturnType<typeof useDataEngine>;
     search: SMSSearchParams;
     total: number;
-    district: string;
+    orgUnit: string;
     dataValues: Record<string, any>;
 }
 
@@ -20,7 +20,7 @@ type SMSEvent =
     | { type: "RETRY" }
     | {
           type: "CREATE_SIGNAL";
-          district: string;
+          orgUnit: string;
           dataValues: Record<string, any>;
       }
     | { type: "FETCH_NEXT_PAGE"; search: SMSSearchParams }
@@ -53,11 +53,11 @@ export const smsMachine = setup({
             {
                 sms: SMS;
                 engine: ReturnType<typeof useDataEngine>;
-                district: string;
+                orgUnit: string;
                 dataValues: Record<string, any>;
             }
-        >(async ({ input: { engine, sms, district, dataValues } }) => {
-            const { district: e, ...eventValues } = sms.event?.dataValues || {};
+        >(async ({ input: { engine, sms, orgUnit, dataValues } }) => {
+            const { orgUnit: e, ...eventValues } = sms.event?.dataValues || {};
             const allDataValues = {
                 ...eventValues,
                 ...dataValues,
@@ -77,7 +77,7 @@ export const smsMachine = setup({
                                     return { dataElement, value };
                                 },
                             ),
-                            orgUnit: district,
+                            orgUnit,
                         },
                     ],
                 },
@@ -98,7 +98,7 @@ export const smsMachine = setup({
             engine,
             search: { page: 1, pageSize: 10, q: "" },
             total: 0,
-            district: "",
+            orgUnit: "",
             dataValues: {},
         };
     },
@@ -146,7 +146,7 @@ export const smsMachine = setup({
                                             dataValues: {
                                                 ...(t.event?.dataValues ?? {}),
                                                 ...context.dataValues,
-                                                district: event.district,
+                                                orgUnit: event.orgUnit,
                                             },
                                         },
                                     };
@@ -154,7 +154,7 @@ export const smsMachine = setup({
                                 return t;
                             });
                         },
-                        district: ({ event }) => event.district,
+                        orgUnit: ({ event }) => event.orgUnit,
                         dataValues: ({ event }) => event.dataValues,
                     }),
                 },
@@ -184,7 +184,7 @@ export const smsMachine = setup({
                 input: ({ context }) => ({
                     sms: context.pending!,
                     engine: context.engine,
-                    district: context.district,
+                    orgUnit: context.orgUnit,
                     dataValues: context.dataValues,
                 }),
                 onDone: {

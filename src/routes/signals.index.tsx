@@ -1,7 +1,6 @@
 import { createRoute, useLoaderData } from "@tanstack/react-router";
 import {
     Button,
-    Card,
     DatePicker,
     Flex,
     FloatButton,
@@ -12,25 +11,21 @@ import {
     TableColumnType,
     TableProps,
     Tag,
+    Typography,
 } from "antd";
 import dayjs from "dayjs";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import SignalModal from "../components/signal-modal";
-import { db } from "../db";
 import { EventWithValues } from "../types";
-import {
-    currentStatus,
-    nextAction,
-    useDexieInfiniteTableQuery,
-} from "../utils";
+import { currentStatus, nextAction, getUniqueNumber } from "../utils/utils";
 
-import {
-    Loading3QuartersOutlined,
-    PlusOutlined,
-    SearchOutlined,
-} from "@ant-design/icons";
+import { CloseOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import { FilterDropdownProps } from "antd/es/table/interface";
+import { querySignals } from "../collections";
+import { SignalContext } from "../machines/signal";
 import { SignalsRoute } from "./signals";
+import { generateUid } from "../utils/id";
+import { RootRoute } from "./__root";
 
 const nextLabels: Record<string, string> = {
     "0": "Create Signal",
@@ -53,120 +48,26 @@ export const SignalsIndexRoute = createRoute({
 });
 
 function SignalsRouteComponent() {
+    const { assignedDistricts } = RootRoute.useLoaderData();
+    const signals = SignalContext.useSelector((state) => state.context.signals);
+    const total = SignalContext.useSelector((state) => state.context.total);
+    const activeFilters = SignalContext.useSelector(
+        (state) => state.context.search.filters,
+    );
+    const current = SignalContext.useSelector(
+        (state) => state.context.search.pagination?.current || 1,
+    );
+    const loading = SignalContext.useSelector((state) =>
+        state.matches("loading"),
+    );
+    const signalActorRef = SignalContext.useActorRef();
     const [open, setOpen] = useState(false);
-    const { engine } = SignalsRoute.useRouteContext();
+    const [tableKey, setTableKey] = useState(0);
     const { programStageDataElements } = useLoaderData({ from: "__root__" });
-    const search = SignalsRoute.useSearch();
     const dataElements = Array.from(programStageDataElements.values()).filter(
         (de) => de.displayInReports,
     );
-    const [actions, setActions] = useState<ReturnType<typeof nextAction>>({
-        next: "1",
-        active: ["0", "1", "2"],
-    });
 
-    const filterFn = useMemo(() => {
-        if (!search.dates) return undefined;
-        const [start, end] = search.dates.split(",").map((d) => dayjs(d));
-        return (item: EventWithValues) => {
-            const lastUpdated = dayjs(item.lastUpdated);
-            return lastUpdated.isAfter(start) && lastUpdated.isBefore(end);
-        };
-    }, [search.dates]);
-
-    const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isFetching } =
-        useDexieInfiniteTableQuery<EventWithValues>({
-            table: db.events,
-            fetchFn: async (page) => {
-                let params: Record<string, string | number> = {
-                    page,
-                    programStage: "Nnnqw1XKpZL",
-                    ouMode: "ALL",
-                    order: "lastUpdated:desc",
-                };
-                if (search.dates && search.dates?.split(",").length > 1) {
-                    const [lastUpdatedStartDate, lastUpdatedEndDate] =
-                        search.dates.split(",");
-                    params = {
-                        ...params,
-                        lastUpdatedStartDate,
-                        lastUpdatedEndDate,
-                    };
-                }
-                const response = await engine.query({
-                    events: {
-                        resource: "events",
-                        params,
-                    },
-                });
-
-                const eventsData = response.events as {
-                    events: Array<{
-                        programStage: string;
-                        programType: string;
-                        orgUnit: string;
-                        program: string;
-                        event: string;
-                        status: string;
-                        orgUnitName: string;
-                        eventDate: string;
-                        created: string;
-                        lastUpdated: string;
-                        deleted: boolean;
-                        attributeOptionCombo: string;
-                        dataValues: Array<{
-                            dataElement: string;
-                            value: string;
-                        }>;
-                        notes: unknown[];
-                    }>;
-                    pager: {
-                        page: number;
-                        pageSize: number;
-                        isLastPage: boolean;
-                    };
-                };
-
-                const transformedEvents: EventWithValues[] =
-                    eventsData.events.map(({ dataValues, ...event }) => {
-                        const dataValuesMap: Record<string, string | null> = {};
-                        for (const dv of dataValues) {
-                            dataValuesMap[dv.dataElement] = dv.value;
-                        }
-                        return {
-                            ...event,
-                            dataValues: dataValuesMap,
-                        };
-                    });
-
-                return {
-                    events: transformedEvents,
-                    pager: eventsData.pager,
-                };
-            },
-            queryKey: ["signals", search.q, search.dates],
-            filterFn,
-        });
-
-    useEffect(() => {
-        const container = document.querySelector(".ant-table-body");
-        if (!container) return;
-
-        const handleScroll = () => {
-            if (
-                container.scrollTop + container.clientHeight >=
-                container.scrollHeight
-            ) {
-                if (hasNextPage && !isFetchingNextPage) fetchNextPage();
-            }
-        };
-
-        container.addEventListener("scroll", handleScroll);
-        return () => container.removeEventListener("scroll", handleScroll);
-    }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
-    const [currentEvent, setCurrentEvent] = useState<EventWithValues | null>(
-        null,
-    );
     const all: Array<(typeof dataElements)[number] & { compulsory: boolean }> =
         [
             {
@@ -195,6 +96,19 @@ function SignalsRouteComponent() {
                 optionSetValue: false,
                 displayInReports: true,
             },
+            {
+                formName: "District",
+                name: "District",
+                id: "orgUnit",
+                compulsory: true,
+                code: "orgUnit",
+                valueType: "TEXT",
+                optionSet: {
+                    options: [],
+                },
+                optionSetValue: false,
+                displayInReports: true,
+            },
             ...dataElements,
             {
                 formName: "Actions",
@@ -211,16 +125,21 @@ function SignalsRouteComponent() {
             },
         ];
     const performAction = (
-        event: EventWithValues,
-        action: ReturnType<typeof nextAction>,
+        event: Awaited<ReturnType<typeof querySignals>>["events"][number],
     ) => {
-        setCurrentEvent(() => event);
-        setActions(() => action);
+        signalActorRef.send({
+            type: "SET_SIGNAL",
+            signal: event,
+        });
+        signalActorRef.send({
+            type: "SET_ACTION",
+            action: "UPDATE",
+        });
         setOpen(() => true);
     };
 
-    const [searchText, setSearchText] = useState("");
-    const [searchedColumn, setSearchedColumn] = useState("");
+    const [, setSearchText] = useState("");
+    const [, setSearchedColumn] = useState("");
     const searchInput = useRef<InputRef>(null);
 
     const handleSearch = (
@@ -240,7 +159,9 @@ function SignalsRouteComponent() {
 
     const getColumnSearchProps = (
         dataIndex: (typeof dataElements)[number],
-    ): TableColumnType<EventWithValues> => {
+    ): TableColumnType<
+        Awaited<ReturnType<typeof querySignals>>["events"][number]
+    > => {
         let filterDropdown = undefined;
 
         if (
@@ -370,9 +291,6 @@ function SignalsRouteComponent() {
                     text: opt.name,
                     value: opt.code,
                 })),
-                onFilter: (value, record) => {
-                    return record.dataValues?.[dataIndex.id] === value;
-                },
                 onFilterDropdownOpenChange: (visible) => {
                     if (visible) {
                         setTimeout(() => searchInput.current?.select(), 100);
@@ -383,14 +301,6 @@ function SignalsRouteComponent() {
 
         return {
             filterDropdown,
-            onFilter: (value, record) => {
-                return (
-                    record.dataValues?.[dataIndex.id]
-                        ?.toString()
-                        .toLowerCase()
-                        .includes((value as string).toLowerCase()) ?? false
-                );
-            },
             onFilterDropdownOpenChange: (visible) => {
                 if (visible) {
                     setTimeout(() => searchInput.current?.select(), 100);
@@ -398,7 +308,9 @@ function SignalsRouteComponent() {
             },
         };
     };
-    const columns: TableProps<EventWithValues>["columns"] = useMemo(() => {
+    const columns: TableProps<
+        Awaited<ReturnType<typeof querySignals>>["events"][number]
+    >["columns"] = useMemo(() => {
         return all.flatMap((de) => {
             if (de.id === "status") {
                 return {
@@ -412,21 +324,41 @@ function SignalsRouteComponent() {
                             </Tag>
                         );
                     },
-                    width: 100,
                     align: "center",
                     fixed: "left",
+                };
+            }
+            if (de.id === "orgUnit") {
+                return {
+                    title: de.formName || de.name,
+                    key: de.id,
+                    render: (_, record) => {
+                        return (
+                            <span>
+                                {assignedDistricts.find(
+                                    (d) => d.value === record.orgUnit,
+                                )?.label || record.orgUnit}
+                            </span>
+                        );
+                    },
+                    ...getColumnSearchProps(de),
                 };
             }
             if (de.id === "actions") {
                 return {
                     title: "Actions",
                     dataIndex: "actions",
-                    render: (_, record) => {
-                        const action = nextAction(record);
+                    render: (
+                        _,
+                        record: Awaited<
+                            ReturnType<typeof querySignals>
+                        >["events"][number],
+                    ) => {
+                        const action = nextAction(record.dataValues);
                         return (
                             <Button
                                 type="primary"
-                                onClick={() => performAction(record, action)}
+                                onClick={() => performAction(record)}
                                 style={{
                                     background:
                                         "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
@@ -440,7 +372,6 @@ function SignalsRouteComponent() {
                     },
                     align: "center",
                     fixed: "right",
-                    width: 180,
                 };
             }
 
@@ -456,7 +387,6 @@ function SignalsRouteComponent() {
                         );
                     },
                     fixed: "left",
-                    width: 140,
                     ...getColumnSearchProps(de),
                 };
             }
@@ -465,7 +395,12 @@ function SignalsRouteComponent() {
                 return {
                     title: de.formName || de.name,
                     key: de.id,
-                    render: (_, record) => {
+                    render: (
+                        _,
+                        record: Awaited<
+                            ReturnType<typeof querySignals>
+                        >["events"][number],
+                    ) => {
                         const val = record.dataValues?.[de.id];
                         return val ? (
                             <Tag
@@ -476,7 +411,6 @@ function SignalsRouteComponent() {
                             </Tag>
                         ) : null;
                     },
-                    width: 140,
                     ...getColumnSearchProps(de),
                 };
             }
@@ -484,7 +418,12 @@ function SignalsRouteComponent() {
             return {
                 title: de.formName || de.name,
                 key: de.id,
-                render: (_, record) => {
+                render: (
+                    _,
+                    record: Awaited<
+                        ReturnType<typeof querySignals>
+                    >["events"][number],
+                ) => {
                     const val =
                         record[de.id as keyof typeof record] ||
                         record.dataValues?.[de.id];
@@ -512,47 +451,126 @@ function SignalsRouteComponent() {
         });
     }, [dataElements]);
 
+    const onChange: TableProps<
+        Awaited<ReturnType<typeof querySignals>>["events"][number]
+    >["onChange"] = (pagination, filters, sorter, extra) => {
+        signalActorRef.send({
+            type: "FETCH_NEXT_PAGE",
+            search: { pagination, filters },
+        });
+    };
+
+    const addSignal = () => {
+        signalActorRef.send({
+            type: "SET_SIGNAL",
+            signal: {
+                programStage: "Nnnqw1XKpZL",
+                programType: "WITHOUT_REGISTRATION",
+                orgUnit: "",
+                program: "iaN1DovM5em",
+                event: generateUid(),
+                status: "COMPLETED",
+                orgUnitName: "Hoima District",
+                eventDate: dayjs().format("YYYY-MM-DD"),
+                created: dayjs().format("YYYY-MM-DD"),
+                lastUpdated: dayjs().format("YYYY-MM-DD"),
+                deleted: false,
+                attributeOptionCombo: "HllvX50cXC0",
+                dataValues: { SXmppM2WKNo: `SIG-${getUniqueNumber()}` },
+            },
+        });
+        signalActorRef.send({
+            type: "SET_ACTION",
+            action: "CREATE",
+        });
+        signalActorRef.send({
+            type: "NEXT_ACTION",
+            action: "0",
+        });
+        setOpen(true);
+    };
+
+    const getFilterDisplayName = (key: string) => {
+        const element = all.find((de) => de.id === key);
+        return element?.formName || element?.name || key;
+    };
+
+    const removeFilter = (filterKey: string) => {
+        const newFilters = { ...activeFilters };
+        delete newFilters[filterKey];
+        setTableKey((prev) => prev + 1);
+    };
+
+    const clearAllFilters = () => {
+        setTableKey((prev) => prev + 1);
+    };
+
+    const hasActiveFilters =
+        Object.keys(activeFilters).length > 0 &&
+        Object.values(activeFilters).some(
+            (val) => val !== null && val !== undefined && val.length > 0,
+        );
+
     return (
         <Flex vertical gap={16} style={{ width: "100%", height: "100%" }}>
-            {/* <Card
-                variant="borderless"
-                style={{
-                    boxShadow:
-                        "0 1px 2px rgba(0,0,0,0.03), 0 4px 12px rgba(0,0,0,0.05)",
-                    display: "flex",
-                    flexDirection: "column",
-                }}
-                // styles={{ body: { padding: 0 } }}
-            >
-            </Card> */}
-
+            {hasActiveFilters && (
+                <Flex
+                    gap={8}
+                    align="center"
+                    wrap="wrap"
+                    style={{
+                        padding: "12px 16px",
+                        background: "#f5f5f5",
+                        borderRadius: "8px",
+                    }}
+                >
+                    <Typography.Text strong style={{ marginRight: 8 }}>
+                        Active Filters:
+                    </Typography.Text>
+                    {Object.entries(activeFilters).map(([key, values]) => {
+                        if (!values || values.length === 0) return null;
+                        return (
+                            <Tag
+                                key={key}
+                                closable
+                                onClose={() => removeFilter(key)}
+                                closeIcon={<CloseOutlined />}
+                                color="blue"
+                                style={{ margin: 0, fontSize: 13 }}
+                            >
+                                <strong>{getFilterDisplayName(key)}:</strong>{" "}
+                                {Array.isArray(values)
+                                    ? values.join(", ")
+                                    : String(values)}
+                            </Tag>
+                        );
+                    })}
+                    <Button
+                        type="link"
+                        size="small"
+                        onClick={clearAllFilters}
+                        style={{ padding: 0, height: "auto" }}
+                    >
+                        Clear All
+                    </Button>
+                </Flex>
+            )}
             <Table
+                key={tableKey}
                 columns={columns}
-                dataSource={data}
+                dataSource={signals}
                 rowKey="event"
-                pagination={false}
-                scroll={{ y: "calc(100vh - 300px)", x: "max-content" }}
-                loading={{
-                    spinning: isFetching || isFetchingNextPage,
-                    indicator: <Loading3QuartersOutlined spin />,
-                }}
-                size="middle"
+                pagination={{ total, pageSize: 12, current }}
+                scroll={{ x: "max-content" }}
+                bordered={true}
+                onChange={onChange}
+								loading={loading}
             />
-            <SignalModal
-                open={open}
-                setOpen={(open) => setOpen(() => open)}
-                actions={actions}
-                values={currentEvent}
-            />
+            <SignalModal open={open} setOpen={(open) => setOpen(() => open)} />
             <FloatButton
+                onClick={() => addSignal()}
                 shape="circle"
                 type="primary"
-                style={
-                    {
-                        // insetInlineEnd: 72,
-                        // insetBlockStart: "calc(100vh - 72px)",
-                    }
-                }
                 tooltip="New Signal"
                 icon={<PlusOutlined />}
             />

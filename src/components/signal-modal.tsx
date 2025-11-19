@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from "react";
+import { useLoaderData } from "@tanstack/react-router";
 import {
     Checkbox,
     Col,
     DatePicker,
-    Flex,
     Form,
     Input,
     InputNumber,
@@ -13,12 +12,11 @@ import {
     Tabs,
 } from "antd";
 import dayjs from "dayjs";
-import { orderBy, set } from "lodash";
-import { db } from "../db";
-import { SignalsRoute } from "../routes/signals";
-import { EventWithValues, ProgramRuleResult } from "../types";
-import { executeProgramRules, nextAction } from "../utils";
-import { useLoaderData } from "@tanstack/react-router";
+import { Dictionary, orderBy, set } from "lodash";
+import React, { useEffect, useState } from "react";
+import { SignalContext } from "../machines/signal";
+import { ProgramRuleResult } from "../types";
+import { executeProgramRules } from "../utils/utils";
 
 const isDate = (valueType: string | undefined) => {
     return (
@@ -32,24 +30,26 @@ const isDate = (valueType: string | undefined) => {
 export default function SignalModal({
     open,
     setOpen,
-    actions: { next, active },
-    values,
 }: {
     open: boolean;
     setOpen: (open: boolean) => void;
-    actions: ReturnType<typeof nextAction>;
-    values: EventWithValues | null;
 }) {
-    const [current, setCurrent] = React.useState<string>(() => next);
+    const signal = SignalContext.useSelector((state) => state.context.signal);
+    const active = SignalContext.useSelector(
+        (state) => state.context.nextActions.active,
+    );
+    const next = SignalContext.useSelector(
+        (state) => state.context.nextActions.next,
+    );
+    const signalActorRef = SignalContext.useActorRef();
     const {
         programStageSections,
         programStageDataElements,
         programRuleVariables,
         programRules,
+        assignedDistricts,
     } = useLoaderData({ from: "__root__" });
 
-    const { engine, queryClient } = SignalsRoute.useRouteContext();
-    const search = SignalsRoute.useSearch();
     const [form] = Form.useForm();
 
     const [ruleResult, setRuleResult] = useState<ProgramRuleResult>({
@@ -63,11 +63,11 @@ export default function SignalModal({
     // -------------------------
     // Apply DHIS2 Rules
     // -------------------------
-    const evaluateRules = (currentValues: Record<string, any>) => {
+    const evaluateRules = (dataValues: Dictionary<string>) => {
         const result = executeProgramRules({
             programRules,
             programRuleVariables,
-            dataValues: currentValues,
+            dataValues,
         });
 
         setRuleResult(result);
@@ -79,13 +79,49 @@ export default function SignalModal({
     };
 
     // -------------------------
-    // Evaluate once when modal opens or values load
+    // Update form when modal opens with a signal
     // -------------------------
     useEffect(() => {
-        if (values) {
-            evaluateRules(values.dataValues ?? {});
+        if (open && signal) {
+            // Always reset first
+            form.resetFields();
+
+            if (
+                signal.event &&
+                signal.dataValues &&
+                Object.keys(signal.dataValues).length > 0
+            ) {
+                // Has data to populate
+                const formValues = {
+                    orgUnit: signal.orgUnit,
+                    ...Object.entries(signal.dataValues).reduce(
+                        (acc, [key, value]) => {
+                            const el = programStageDataElements.get(key);
+                            if (el?.valueType === "BOOLEAN") {
+                                set(acc, key, value === "true");
+                            } else {
+                                set(acc, key, value);
+                            }
+                            return acc;
+                        },
+                        {},
+                    ),
+                };
+                // Use setTimeout to ensure form is mounted
+                setTimeout(() => {
+                    form.setFieldsValue(formValues);
+                    evaluateRules(formValues);
+                }, 0);
+            } else {
+                // New signal or empty signal
+                console.log("Empty signal, form stays empty");
+                if (signal.orgUnit) {
+                    form.setFieldValue("orgUnit", signal.orgUnit);
+                }
+                evaluateRules(signal.dataValues || {});
+            }
         }
-    }, [open, values]);
+    }, [open, signal?.event]);
 
     // -------------------------
     // On value change → re-run rules
@@ -94,77 +130,42 @@ export default function SignalModal({
         evaluateRules(allValues);
     };
 
-    const onCreate = async (updatedValues: any) => {
-        if (values) {
-            const mergedValues: Record<string, string> = {
-                ...values.dataValues,
+    const onCreate = async (updatedValues: Dictionary<string>) => {
+        if (signal?.dataValues) {
+            const mergedValues: Dictionary<string> = {
+                ...signal.dataValues,
                 ...updatedValues,
             };
-
-            const dataValues = Object.entries(mergedValues).flatMap(
-                ([key, value]) => {
-                    const element = programStageDataElements.get(key);
-                    if (element?.valueType === "BOOLEAN") {
-                        return { dataElement: key, value: !!value };
-                    } else if (value) {
-                        return { dataElement: key, value };
-                    }
-                    return [];
-                },
-            );
-
-            await db.events.put({ ...values, dataValues: mergedValues });
+            signalActorRef.send({
+                type: "CREATE_OR_UPDATE_SIGNAL",
+                signal: { ...signal, dataValues: mergedValues },
+            });
             setOpen(false);
-
-            try {
-                await engine.mutate({
-                    resource: "events",
-                    type: "create",
-                    data: { events: [{ ...values, dataValues }] },
-                    params: { async: false },
-                });
-                await queryClient.invalidateQueries({
-                    queryKey: ["signals", search.q, search.dates],
-                });
-            } catch (error) {
-                await db.events.put(values);
-            }
         }
     };
-
+    const oClose = () => {
+        setOpen(false);
+        signalActorRef.send({ type: "GO_BACK" });
+    };
     return (
-        <Flex>
-            <Modal
-                open={open}
-                title="Update Signal"
-                okText="Update Signal"
-                cancelText="Cancel"
-                okButtonProps={{ autoFocus: true, htmlType: "submit" }}
-                onCancel={() => setOpen(false)}
-                styles={{ body: { maxHeight: "70vh", overflow: "auto" } }}
-                modalRender={(dom) => (
-                    <Form
-                        form={form}
-                        layout="vertical"
-                        name="signal_form"
-                        initialValues={Object.entries(
-                            values?.dataValues ?? {},
-                        ).reduce((acc, [key, value]) => {
-                            const el = programStageDataElements.get(key);
-                            if (el?.valueType === "BOOLEAN") {
-                                set(acc, key, value === "true");
-                            } else {
-                                set(acc, key, value);
-                            }
-                            return acc;
-                        }, {})}
-                        onValuesChange={handleValuesChange}
-                        onFinish={onCreate}
-                    >
-                        {dom}
-                    </Form>
-                )}
-                width="70%"
+        <Modal
+            open={open}
+            title="Update Signal"
+            okText="Update Signal"
+            cancelText="Cancel"
+            okButtonProps={{ autoFocus: true, htmlType: "submit" }}
+            onCancel={oClose}
+            styles={{ body: { maxHeight: "70vh", overflow: "auto" } }}
+            onOk={() => form.submit()}
+            width="70%"
+        >
+            <Form
+                key={signal?.event || `new-${Date.now()}`}
+                form={form}
+                layout="vertical"
+                name="signal_form"
+                onValuesChange={handleValuesChange}
+                onFinish={onCreate}
             >
                 <Tabs
                     items={orderBy(
@@ -177,6 +178,36 @@ export default function SignalModal({
                         disabled: !active.includes(String(section.sortOrder)),
                         children: (
                             <Row gutter={24}>
+                                {section.sortOrder === 0 && (
+                                    <Col span={8}>
+                                        <Form.Item
+                                            label="District"
+                                            name="orgUnit"
+                                            rules={[
+                                                {
+                                                    required: true,
+                                                    message:
+                                                        "Please select a district",
+                                                },
+                                            ]}
+                                        >
+                                            <Select
+                                                options={assignedDistricts}
+                                                showSearch
+                                                placeholder="Select a district"
+                                                filterOption={(input, option) =>
+                                                    option
+                                                        ? option.label
+                                                              .toLowerCase()
+                                                              .includes(
+                                                                  input.toLowerCase(),
+                                                              )
+                                                        : false
+                                                }
+                                            />
+                                        </Form.Item>
+                                    </Col>
+                                )}
                                 {section.dataElements.map((de) => {
                                     const dataElement =
                                         programStageDataElements.get(de);
@@ -259,25 +290,6 @@ export default function SignalModal({
                                                         message: `${dataElement.name} is required`,
                                                     },
                                                 ]}
-                                                // getValueProps={(value) =>
-                                                //     dataElement.valueType?.startsWith(
-                                                //         "DATE",
-                                                //     )
-                                                //         ? {
-                                                //               value: value
-                                                //                   ? dayjs(value)
-                                                //                   : null,
-                                                //           }
-                                                //         : {}
-                                                // }
-                                                // normalize={(value) =>
-                                                //     dayjs.isDayjs(value)
-                                                //         ? value.format(
-                                                //               "YYYY-MM-DD",
-                                                //           )
-                                                //         : value
-                                                // }
-
                                                 getValueProps={
                                                     isDate(
                                                         dataElement?.valueType,
@@ -314,10 +326,12 @@ export default function SignalModal({
                             </Row>
                         ),
                     }))}
-                    activeKey={current}
-                    onChange={(x) => setCurrent(String(x))}
+                    activeKey={next || active.at(-1)}
+                    onChange={(x) =>
+                        signalActorRef.send({ type: "NEXT_ACTION", action: x })
+                    }
                 />
-            </Modal>
-        </Flex>
+            </Form>
+        </Modal>
     );
 }

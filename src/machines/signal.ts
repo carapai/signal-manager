@@ -2,39 +2,50 @@ import { useDataEngine } from "@dhis2/app-runtime";
 import { createActorContext } from "@xstate/react";
 import { assign, fromPromise, setup } from "xstate";
 import {
-	querySignals,
-	signalsQueryOptions,
-	totalSignalsQueryOptions,
+    querySignals,
+    signalsQueryOptions,
+    totalSignalsQueryOptions,
 } from "../collections";
 import { queryClient } from "../query-client";
-import { Event, SMSSearchParams } from "../types";
+import { OnChange } from "../types";
+import { nextAction } from "../utils/utils";
 
 interface SignalContext {
     signals: Awaited<ReturnType<typeof querySignals>>["events"];
     error?: string;
     signal?: Awaited<ReturnType<typeof querySignals>>["events"][number];
     engine: ReturnType<typeof useDataEngine>;
-    search: SMSSearchParams;
     total: number;
+    action: "CREATE" | "UPDATE";
+    search: OnChange;
+    nextActions: { next: string; active: string[] };
 }
 
 type SignalEvent =
     | { type: "RETRY" }
+    | { type: "GO_BACK" }
     | {
-          type: "CREATE_SIGNAL";
+          type: "CREATE_OR_UPDATE_SIGNAL";
           signal: Awaited<ReturnType<typeof querySignals>>["events"][number];
       }
-    | { type: "FETCH_NEXT_PAGE"; search: SMSSearchParams }
+    | { type: "FETCH_NEXT_PAGE"; search: OnChange }
     | {
           type: "SET_SIGNALS";
           signals: Awaited<ReturnType<typeof querySignals>>["events"];
       }
-    | { type: "UPDATE_SIGNAL"; signal: Event }
+    | {
+          type: "SET_ACTION";
+          action: "CREATE" | "UPDATE";
+      }
+    | {
+          type: "NEXT_ACTION";
+          action: string;
+      }
     | {
           type: "SET_SIGNAL";
           signal: Awaited<ReturnType<typeof querySignals>>["events"][number];
       };
-export const smsMachine = setup({
+export const signalMachine = setup({
     types: {
         context: {} as SignalContext,
         events: {} as SignalEvent,
@@ -45,7 +56,7 @@ export const smsMachine = setup({
             Awaited<ReturnType<typeof querySignals>>,
             {
                 engine: ReturnType<typeof useDataEngine>;
-                search: SMSSearchParams;
+                search: OnChange;
             }
         >(async ({ input: { engine, search } }) => {
             const data = await queryClient.fetchQuery(
@@ -57,11 +68,11 @@ export const smsMachine = setup({
             number,
             {
                 engine: ReturnType<typeof useDataEngine>;
-                dates?: string;
+                search?: OnChange;
             }
-        >(async ({ input: { engine, dates } }) => {
+        >(async ({ input: { engine, search } }) => {
             const data = await queryClient.fetchQuery(
-                totalSignalsQueryOptions(engine, dates),
+                totalSignalsQueryOptions(engine, search),
             );
             return data;
         }),
@@ -76,6 +87,7 @@ export const smsMachine = setup({
             }
         >(async ({ input: { engine, signal } }) => {
             const { dataValues, ...rest } = signal;
+            const { orgUnit, ...eventValues } = dataValues;
             await engine.mutate({
                 resource: "events",
                 type: "create",
@@ -83,13 +95,14 @@ export const smsMachine = setup({
                     events: [
                         {
                             ...rest,
-                            dataValues: Object.entries(dataValues).flatMap(
+                            dataValues: Object.entries(eventValues).flatMap(
                                 ([dataElement, value]) => {
                                     if (value === undefined) return [];
                                     if (value === null) return [];
                                     return { dataElement, value };
                                 },
                             ),
+                            orgUnit,
                         },
                     ],
                 },
@@ -102,30 +115,35 @@ export const smsMachine = setup({
         }),
     },
 }).createMachine({
-    id: "sms",
+    id: "signal",
     initial: "loading",
     context: ({ input: { engine } }) => {
         return {
             signals: [],
             engine,
-            search: { page: 1, pageSize: 10, q: "" },
+            search: {
+                pagination: { current: 1, pageSize: 12 },
+                filters: {},
+            },
             total: 0,
             district: "",
+            action: "CREATE",
+            nextActions: { next: "0", active: ["0", "1"] },
         };
     },
 
     states: {
         loading: {
             invoke: {
-                src: "fetchTotalSignals",
+                src: "fetchSignals",
                 input: ({ context: { engine, search } }) => {
-                    return { engine, dates: search.dates };
+                    return { engine, search };
                 },
                 onDone: {
-                    target: "afterTotals",
+                    target: "success",
                     actions: assign({
-                        total: ({ event }) => event.output,
-                        search: () => ({ page: 1, pageSize: 10, q: "" }),
+                        signals: ({ event }) => event.output.events,
+                        total: ({ event }) => event.output.pager.total,
                     }),
                 },
                 onError: {
@@ -140,70 +158,26 @@ export const smsMachine = setup({
                 },
             },
         },
-        afterTotals: {
-            invoke: {
-                src: "fetchSignals",
-                input: ({ context: { engine, search } }) => {
-                    return { engine, search };
-                },
-                onDone: {
-                    target: "success",
-                    actions: assign({
-                        signals: ({ event }) => event.output.events,
-                    }),
-                },
-                onError: {
-                    target: "failure",
-                    actions: assign({
-                        error: ({ event }) =>
-                            event.error instanceof Error
-                                ? event.error.message
-                                : String(event.error),
-                    }),
-                },
-            },
-        },
 
         success: {
             on: {
-                CREATE_SIGNAL: {
-                    guard: ({ context }) => !!context.signal,
-                    target: "optimisticUpdate",
-                    actions: assign({
-                        signals: ({ context, event }) => {
-                            return context.signals.concat(event.signal);
-                        },
-                    }),
-                },
                 SET_SIGNAL: {
+                    target: "signalSelection",
                     actions: assign({
                         signal: ({ event }) => event.signal,
+                        nextActions: ({ event }) =>
+                            nextAction(event.signal.dataValues),
                     }),
                 },
                 FETCH_NEXT_PAGE: {
-                    target: "afterTotals",
+                    target: "loading",
                     actions: assign({
                         search: ({ event }) => event.search,
                     }),
                 },
-                UPDATE_SIGNAL: {
-                    guard: ({ context }) => !!context.signal,
-                    target: "optimisticUpdate",
+                SET_ACTION: {
                     actions: assign({
-                        signals: ({ context }) => {
-                            return context.signals.map((signal) => {
-                                if (
-                                    context.signal &&
-                                    signal.event === context.signal.event
-                                ) {
-                                    return {
-                                        ...signal,
-                                        ...context.signal,
-                                    };
-                                }
-                                return signal;
-                            });
-                        },
+                        action: ({ event }) => event.action,
                     }),
                 },
             },
@@ -217,26 +191,90 @@ export const smsMachine = setup({
                     engine: context.engine,
                 }),
                 onDone: {
-                    target: "success",
+                    target: "loading",
                     actions: assign({
-                        signals: ({ context, event }) =>
-                            context.signals.map((t) =>
-                                t.event === event.output.event
-                                    ? event.output
-                                    : t,
-                            ),
                         signal: undefined,
+                        action: "CREATE",
                     }),
                 },
                 onError: {
-                    target: "success",
+                    target: "loading",
                     actions: assign({
                         error: ({ event }) =>
                             event.error instanceof Error
                                 ? event.error.message
                                 : String(event.error),
                         signal: undefined,
+                        action: "CREATE",
+                        search: ({ context }) => ({
+                            ...context.search,
+                            pagination: {
+                                current: 1,
+                                ...context.search.pagination,
+                            },
+                        }),
+                        signals: ({ context }) => {
+                            if (context.action === "CREATE") {
+                                return context.signals.filter(
+                                    (signal) =>
+                                        signal.event !== context.signal?.event,
+                                );
+                            }
+                            return context.signals.map((s) =>
+                                s.event === context.signal?.event
+                                    ? context.signal!
+                                    : s,
+                            );
+                        },
                     }),
+                },
+            },
+        },
+        signalSelection: {
+            on: {
+                CREATE_OR_UPDATE_SIGNAL: {
+                    guard: ({ event, context }) =>
+                        !!event.signal && !!context.action,
+                    target: "optimisticUpdate",
+                    actions: assign({
+                        signals: ({ context, event }) => {
+                            if (context.action === "UPDATE") {
+                                const existingSignal = context.signals.find(
+                                    (s) => s.event === event.signal.event,
+                                );
+                                if (existingSignal) {
+                                    return context.signals.map((signal) => {
+                                        if (
+                                            event.signal &&
+                                            signal.event === event.signal.event
+                                        ) {
+                                            return {
+                                                ...signal,
+                                                ...event.signal,
+                                            };
+                                        }
+                                        return signal;
+                                    });
+                                }
+                                return context.signals;
+                            }
+                            return [event.signal, ...context.signals];
+                        },
+                        signal: ({ event }) => event.signal,
+                    }),
+                },
+
+                NEXT_ACTION: {
+                    actions: assign({
+                        nextActions: ({ event, context }) => ({
+                            ...context.nextActions,
+                            next: event.action,
+                        }),
+                    }),
+                },
+
+                GO_BACK: {
+                    target: "success",
                 },
             },
         },
@@ -249,4 +287,4 @@ export const smsMachine = setup({
     },
 });
 
-export const SMSContext = createActorContext(smsMachine);
+export const SignalContext = createActorContext(signalMachine);

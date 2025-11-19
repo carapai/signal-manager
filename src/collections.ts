@@ -3,6 +3,7 @@ import { queryCollectionOptions } from "@tanstack/query-db-collection";
 import { createCollection } from "@tanstack/react-db";
 import { QueryClient, queryOptions } from "@tanstack/react-query";
 import {
+    OnChange,
     ProgramRule,
     ProgramRuleVariable,
     ProgramStage,
@@ -12,7 +13,7 @@ import {
 } from "./types";
 import { fromPairs, orderBy } from "lodash";
 import { Event } from "./types";
-import { getUniqueNumber } from "./utils";
+import { getUniqueNumber } from "./utils/utils";
 
 const queryClient = new QueryClient();
 
@@ -42,27 +43,31 @@ export const smsCollection = (engine: ReturnType<typeof useDataEngine>) => {
 };
 
 export const querySignals = async ({
-    searchParams,
+    search,
     engine,
 }: {
-    searchParams: SMSSearchParams;
+    search: OnChange;
     engine: ReturnType<typeof useDataEngine>;
 }) => {
-    let params: Record<string, string | number> = {
-        pageSize: searchParams.pageSize,
-        page: searchParams.page,
+    const params = new URLSearchParams({
+        pageSize: `${search.pagination.pageSize || 12}`,
+        page: `${search.pagination.current || 1}`,
         programStage: "Nnnqw1XKpZL",
         ouMode: "ALL",
+        order: "updatedAt:desc",
         totalPages: "true",
-    };
-    if (searchParams.dates && searchParams.dates?.split(",").length > 1) {
-        const [occurredAfter, occurredBefore] = searchParams.dates.split(",");
-        params = { ...params, occurredAfter, occurredBefore };
+    });
+
+    for (const [filterKey, filterValues] of Object.entries(
+        search?.filters || {},
+    )) {
+        if (filterValues && filterValues.length > 0) {
+            params.append(`filter`, `${filterKey}:eq:${filterValues[0]}`);
+        }
     }
     const { events } = (await engine.query({
         events: {
-            resource: "events",
-            params,
+            resource: `tracker/events?${params.toString()}`,
         },
     })) as {
         events: {
@@ -195,24 +200,32 @@ export const smsQueryOptions = (
 
 export const totalSignalsQueryOptions = (
     engine: ReturnType<typeof useDataEngine>,
-    dates?: string,
+    search?: OnChange,
 ) => {
     return queryOptions({
-        queryKey: ["total-signals", dates],
+        queryKey: [
+            "total-signals",
+            Object.values(search?.filters || {})
+                .flat()
+                .sort()
+                .join(","),
+        ],
         queryFn: async () => {
-            let params: Record<string, string | number> = {
-                pageSize: 1,
+            const params = new URLSearchParams({
+                pageSize: "1",
                 programStage: "Nnnqw1XKpZL",
                 totalPages: "true",
-            };
+            });
 
-            if (dates && dates?.split(",").length > 1) {
-                const [occurredAfter, occurredBefore] = dates.split(",");
-                params = {
-                    ...params,
-                    occurredAfter,
-                    occurredBefore,
-                };
+            for (const [filterKey, filterValues] of Object.entries(
+                search?.filters || {},
+            )) {
+                if (filterValues && filterValues.length > 0) {
+                    params.append(
+                        `filter`,
+                        `${filterKey}:eq:${filterValues[0]}`,
+                    );
+                }
             }
 
             const {
@@ -221,8 +234,7 @@ export const totalSignalsQueryOptions = (
                 },
             } = (await engine.query({
                 events: {
-                    resource: "events",
-                    params,
+                    resource: `events?${params.toString()}`,
                 },
             })) as {
                 events: {
@@ -240,23 +252,18 @@ export const totalSignalsQueryOptions = (
 };
 export const signalsQueryOptions = (
     engine: ReturnType<typeof useDataEngine>,
-    searchParams: SMSSearchParams = {
-        page: 1,
-        pageSize: 10,
-        q: "",
-        dates: "",
-    },
+    search: OnChange,
 ) => {
     return queryOptions({
         queryKey: [
             "signals-data",
-            searchParams.page,
-            searchParams.pageSize,
-            searchParams.q,
-            searchParams.dates,
+            Object.values(search?.filters || {})
+                .flat()
+                .sort()
+                .join(","),
         ],
         queryFn: async () => {
-            return querySignals({ searchParams, engine });
+            return querySignals({ search, engine });
         },
     });
 };
