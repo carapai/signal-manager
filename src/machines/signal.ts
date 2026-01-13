@@ -122,7 +122,7 @@ export const signalMachine = setup({
             signals: [],
             engine,
             search: {
-                pagination: { current: 1, pageSize: 12 },
+                pagination: { current: 1, pageSize: 10 },
                 filters: {},
             },
             total: 0,

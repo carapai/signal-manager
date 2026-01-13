@@ -155,11 +155,8 @@ export function executeProgramRules({
     programRuleVariables: ProgramRuleVariable[];
     dataValues: Record<string, any>;
 }): ProgramRuleResult {
-    // Step 1: Build variable map (variable name -> actual value)
     const variableValues: Record<string, any> = {};
-
     for (const variable of programRuleVariables) {
-        // console.log("Processing variable:", variable);
         let value: any = null;
 
         if (
@@ -170,26 +167,49 @@ export function executeProgramRules({
         }
         variableValues[variable.name] = value ?? null;
     }
-
     // Step 2: Safely evaluate rule condition
     const evaluateCondition = (condition: string): boolean => {
-        const safeCond = condition.replace(/#\{(\w+)\}/g, (_, name) => {
+        // Updated regex to match variable names with spaces: #{variable name with spaces}
+        const safeCond = condition.replace(/#\{([^}]+)\}/g, (_, name) => {
             const val = variableValues[name];
-            if (typeof val === "string") return `'${val}'`;
-            if (val === null || val === undefined || val === "''")
-                return "null";
-
-            console.log("Variable value:", name, val);
-            return val;
+            // Always wrap values in quotes to handle strings with spaces, dashes, dates, special chars
+            if (val === null || val === undefined) {
+                return "''";
+            }
+            if (typeof val === "boolean") {
+                return String(val);
+            }
+            if (typeof val === "number") {
+                return String(val);
+            }
+            // For strings, dates, and any other type: escape and quote
+            // This handles: spaces, dashes, colons (dates like 2024-01-15 or 2024-01-15T10:30:00)
+            const stringVal = String(val);
+            const escaped = stringVal
+                .replace(/\\/g, "\\\\")  // Escape backslashes first
+                .replace(/'/g, "\\'");    // Then escape single quotes
+            return `'${escaped}'`;
         });
 
         try {
-            const value = new Function(
-                `return (${safeCond.replace("!=", "!==")})`,
-            )();
+            // Replace comparison operators with strict versions
+            // Split by quotes, only replace in non-quoted sections
+            let parts = safeCond.split("'");
+            for (let i = 0; i < parts.length; i += 2) {
+                // Only process parts outside of quotes (even indices)
+                // Order matters: replace != first, then == (but not !=, <=, >=, ===)
+                parts[i] = parts[i]
+                    .replace(/!=/g, "!==")
+                    .replace(/([^!<>=])={2}(?!=)/g, "$1===")  // == to === (but not !==, ===)
+                    .replace(/([^!<>=])=(?!=)/g, "$1===");     // Single = to === (but not !=, <=, >=, ==)
+            }
+            const normalizedCond = parts.join("'");
+
+            console.log("Normalized condition:", normalizedCond);
+            const value = new Function(`return (${normalizedCond})`)();
             return value;
         } catch (err) {
-            console.warn(`Invalid condition: ${condition}`, safeCond);
+            console.warn(`Invalid condition: ${condition}`, safeCond, err);
             return false;
         }
     };
@@ -209,27 +229,44 @@ export function executeProgramRules({
         for (const action of rule.programRuleActions) {
             switch (action.programRuleActionType) {
                 case "ASSIGN":
-                    action.dataElement &&
-                        (result.assignments[action.dataElement.id] =
-                            action.value);
+                    if (action.dataElement) {
+                        result.assignments[action.dataElement.id] =
+                            action.value;
+                        console.log(
+                            "Assigned",
+                            action.dataElement.id,
+                            "=",
+                            action.value,
+                        );
+                    }
                     break;
                 case "HIDEFIELD":
-                    action.dataElement &&
+                    if (action.dataElement) {
                         result.hiddenFields.add(action.dataElement.id);
+                        // Clear the value when hiding the field to avoid stale data
+                        result.assignments[action.dataElement.id] = '';
+                        console.log("Hidden field:", action.dataElement.id, "and cleared its value");
+                    }
                     break;
                 case "SHOWFIELD":
-                    action.dataElement &&
+                    if (action.dataElement) {
                         result.shownFields.add(action.dataElement.id);
+                    }
                     break;
                 case "DISPLAYTEXT":
-                    if (action.value) result.messages.push(action.value);
+                    if (action.value) {
+                        result.messages.push(action.value);
+                    }
                     break;
                 case "ERROR":
-                    if (action.value)
+                    if (action.value) {
                         result.messages.push(`Error: ${action.value}`);
+                    }
                     break;
                 case "SHOWWARNING":
-                    if (action.value) result.warnings.push(action.value);
+                    if (action.value) {
+                        result.warnings.push(action.value);
+                    }
                     break;
             }
         }

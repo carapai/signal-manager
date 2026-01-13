@@ -57,6 +57,9 @@ function SignalsRouteComponent() {
     const current = SignalContext.useSelector(
         (state) => state.context.search.pagination?.current || 1,
     );
+    const pageSize = SignalContext.useSelector(
+        (state) => state.context.search.pagination?.pageSize || 10,
+    );
     const loading = SignalContext.useSelector((state) =>
         state.matches("loading"),
     );
@@ -560,11 +563,11 @@ function SignalsRouteComponent() {
                 columns={columns}
                 dataSource={signals}
                 rowKey="event"
-                pagination={{ total, pageSize: 12, current }}
+                pagination={{ total, pageSize, current }}
                 scroll={{ x: "max-content" }}
                 bordered={true}
                 onChange={onChange}
-								loading={loading}
+                loading={loading}
             />
             <SignalModal open={open} setOpen={(open) => setOpen(() => open)} />
             <FloatButton
